@@ -13,7 +13,7 @@
 #
 #------------------------------------------------------------------------------#
 
-VERSION="v2016051500"
+VERSION="v2016051600"
 
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -391,14 +391,14 @@ MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[]' ' ' | tr -s
 
 #echo "MEDIAINFO='${MEDIAINFO}'"
 if [ -n "${IST_XmalY}" ] ; then
-	IN_XY="${IST_XmalY}"
+	IST_XY="${IST_XmalY}"
 else
-	IN_XY="$(echo "${MEDIAINFO}" | fgrep ' DAR ' | awk '{print $1}')"
+	IST_XY="$(echo "${MEDIAINFO}" | fgrep ' DAR ' | awk '{print $1}')"
 fi
-#echo "IN_XY='${IN_XY}'"
+#echo "IST_XY='${IST_XY}'"
 #exit
 
-if [ -z "${IN_XY}" ] ; then
+if [ -z "${IST_XY}" ] ; then
 	echo "Es konnte die Video-Auflösung nicht ermittelt werden."
 	echo "versuchen Sie es mit diesem Parameter nocheinmal:"
 	echo "-in_xmaly"
@@ -479,6 +479,9 @@ if [ -z "${CROP}" ] ; then
 		DAR_KOMMA="$(echo "${DAR}" | egrep '[:/]' | awk -F'[:/]' '{print $1/$2}')"
 		DAR_FAKTOR="$(echo "${DAR}" | egrep '[:/]' | awk -F'[:/]' '{printf "%u\n", ($1*100000)/$2}')"
 	fi
+
+	WIDTH="$(echo "${IST_XY}" | awk -F'x' '{print $1}')"
+	HEIGHT="$(echo "${IST_XY}" | awk -F'x' '{print $2}')"
 else
 	### CROP-Seiten-Format
 	# -vf crop=width:height:x:y
@@ -498,8 +501,8 @@ fi
 
 
 if [ -n "${IST_XmalY}" ] ; then
-	WIDTH="$(echo "${IN_XY}" | awk -F'x' '{print $1}')"
-	HEIGHT="$(echo "${IN_XY}" | awk -F'x' '{print $2}')"
+	WIDTH="$(echo "${IST_XY}" | awk -F'x' '{print $1}')"
+	HEIGHT="$(echo "${IST_XY}" | awk -F'x' '{print $2}')"
 fi
 
 
@@ -516,6 +519,9 @@ fi
 #
 
 #echo "
+#IST_XY='${IST_XY}'
+#IST_XmalY='${IST_XmalY}'
+#SOLL_XmalY='${SOLL_XmalY}'
 #DAR='${DAR}'
 #DAR_FAKTOR='${DAR_FAKTOR}'
 #DAR_KOMMA='${DAR_KOMMA}'
@@ -595,6 +601,8 @@ VIDEOOPTION="-crf ${AVC_CRF} -vf ${ZEILENSPRUNG}${CROP}${SCALE}${PAD}${OUT_XY}se
 START_MP4_FORMAT="-f ${FORMAT}"
 
 #echo "
+#IST_XmalY='${IST_XmalY}'
+#SOLL_XmalY='${SOLL_XmalY}'
 #DAR_KOMMA='${DAR_KOMMA}'
 #DAR_FAKTOR='${DAR_FAKTOR}'
 #PAR_KOMMA='${PAR_KOMMA}'

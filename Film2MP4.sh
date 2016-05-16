@@ -13,7 +13,7 @@
 #
 #------------------------------------------------------------------------------#
 
-VERSION="v2016051600"
+VERSION="v2016051601"
 
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -54,27 +54,27 @@ while [ "${#}" -ne "0" ]; do
                         CROP="${2}"		# -vf crop=width:height:x:y
                         shift
                         ;;
-                -dar)
+                -dar|-ist_dar)
                         IST_DAR="${2}"		# Display-Format
                         shift
                         ;;
-                -par)
+                -par|-ist_par)
                         IST_PAR="${2}"		# Pixel-Format
                         shift
                         ;;
-                -in_xmaly)
-                        IST_XmalY="${2}"	# Bildauflösung/Rasterformat der Quelle
+                -in_xmaly|-ist_xmaly)
+                        IST_XY="${2}"		# Bildauflösung/Rasterformat der Quelle
                         shift
                         ;;
-                -out_xmaly)
-                        SOLL_XmalY="${2}"	# Bildauflösung/Rasterformat der Ausgabe
+                -out_xmaly|-soll_xmaly)
+                        SOLL_XY="${2}"		# Bildauflösung/Rasterformat der Ausgabe
                         shift
                         ;;
-                -aq)
+                -aq|-soll_aq)
                         TONQUALIT="${2}"	# Audio-Qualität
                         shift
                         ;;
-                -vq)
+                -vq|-soll_vq)
                         BILDQUALIT="${2}"	# Video-Qualität
                         shift
                         ;;
@@ -119,27 +119,33 @@ while [ "${#}" -ne "0" ]; do
         -ton 2
 
         # die gewünschte Bildaufloesung des neuen Filmes
+        -soll_xmaly 720x576
         -out_xmaly 720x576
 
         # wenn die Bildaufloesung des Originalfilmes nicht automatisch ermittelt
         # werden kann, dann muss sie manuell als Parameter uebergeben werden
+        -ist_xmaly 480x270
         -in_xmaly 480x270
 
         # wenn das Bildformat des Originalfilmes nicht automatisch ermittelt
         # werden kann, dann muss es manuell als Parameter uebergeben werden
         -dar 16:9
+        -ist_dar 16:9
 
         # wenn die Pixelgeometrie des Originalfilmes nicht automatisch ermittelt
         # werden kann, dann muss sie manuell als Parameter uebergeben werden
         -par 64:45
+        -ist_par 64:45
 
         # will man eine andere Video-Qualitaet, dann sie manuell als Parameter
         # uebergeben werden
         -vq 5
+        -soll_vq 5
 
         # will man eine andere Audio-Qualitaet, dann sie manuell als Parameter
         # uebergeben werden
         -aq 3
+        -soll_aq 3
 
         # Man kann aus dem Film einige Teile entfernen, zum Beispiel Werbung.
         # Angaben muessen in Sekunden erfolgen,
@@ -167,6 +173,9 @@ while [ "${#}" -ne "0" ]; do
                         ;;
         esac
 done
+
+#==============================================================================#
+### Trivialitäts-Check
 
 #------------------------------------------------------------------------------#
 
@@ -202,7 +211,7 @@ else
 fi
 
 #------------------------------------------------------------------------------#
-### Betriebssystem / Audio
+### Audio-Unterstützung pro Betriebssystem
 
 if [ "FreeBSD" = "$(uname -s)" ] ; then
         #AUDIOCODEC="libmp3lame"
@@ -228,6 +237,9 @@ if [ -z "${PROGRAMM}" ] ; then
         echo "Weder avconv noch ffmpeg konnten gefunden werden. Abbruch!"
         exit 1
 fi
+
+#==============================================================================#
+### Qualitäts-Parameter-Übersetzung
 
 #------------------------------------------------------------------------------#
 ### Audio
@@ -380,6 +392,9 @@ case "${BILDQUALIT}" in
                 ;;
 esac
 
+#==============================================================================#
+### IN-Daten (META-Daten) aus der Filmdatei lesen
+
 #------------------------------------------------------------------------------#
 ### Video
 
@@ -389,70 +404,204 @@ MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[]' ' ' | tr -s
 # tbc (FPS vom Codec) = the time base in AVCodecContext for the codec used for a particular stream
 # tbr (FPS vom Video-Stream geraten) = tbr is guessed from the video stream and is the value users want to see when they look for the video frame rate
 
-#echo "MEDIAINFO='${MEDIAINFO}'"
-if [ -n "${IST_XmalY}" ] ; then
-	IST_XY="${IST_XmalY}"
-else
-	IST_XY="$(echo "${MEDIAINFO}" | fgrep ' DAR ' | awk '{print $1}')"
-fi
-#echo "IST_XY='${IST_XY}'"
-#exit
-
-if [ -z "${IST_XY}" ] ; then
-	echo "Es konnte die Video-Auflösung nicht ermittelt werden."
-	echo "versuchen Sie es mit diesem Parameter nocheinmal:"
-	echo "-in_xmaly"
-	echo "z.B.: -in_xmaly 720:576"
-	echo "ABBRUCH!"
-	exit 1
-fi
-
-
 ### hier wird ermittelt, ob der film progressiv oder im Zeilensprungverfahren vorliegt
+#
+# leider kann das z.Z. nur mit "mediainfo" einfach und zuverlässig ermittelt werden
+# mit "ffprobe" ist es etwas komplizierter...
+#
 SCAN_TYPE="$(mediainfo --BOM -f "${FILMDATEI}" 2>/dev/null | grep -Fv pixels | awk -F':' '/Scan type[ ]+/{print $2}' | tr -s ' ' '\n' | egrep -v '^$' | head -n1)"
 if [ "${SCAN_TYPE}" != "Progressive" ] ; then
         ### wenn der Film im Zeilensprungverfahren vorliegt
         ZEILENSPRUNG="yadif,"
 fi
 
+IN_XY="$(echo "${MEDIAINFO}" | fgrep ' DAR ' | awk '{print $1}')"
+IN_PAR="$(echo "${MEDIAINFO}" | fgrep ' DAR ' | awk '{print $3}')"
+IN_DAR="$(echo "${MEDIAINFO}" | fgrep ' DAR ' | awk '{print $5}')"
 
-### Pixel-Seiten-Format
+#echo "
+#MEDIAINFO='${MEDIAINFO}'
+#IN_XY='${IN_XY}'
+#IN_PAR='${IN_PAR}'
+#IN_DAR='${IN_DAR}'
+#ZEILENSPRUNG='${ZEILENSPRUNG}'
+#"
+#exit
+
+
+#==============================================================================#
+### Korrektur: gelesene IN-Daten mit übergebenen IST-Daten überschreiben
+###
+### Es wird unbedingt das Rasterformat der Bildgröße (Breite x Höhe) benötigt!
+###
+### Weiterhin wird das Seitenverhältnis des Bildes (DAR) benötigt,
+### dieser Wert kann aber auch aus dem Seitenverhältnis der Bildpunkte (PAR/SAR)
+### errechnet werden.
+###
+### Sollte die Bildgröße bzw. DAR+PAR/SAR fehlen, bricht die Bearbeitung ab!
+###
+### zum Beispiel:
+###                     IN_XY  = 720 x 576 (Rasterformat der Bildgröße)
+###                     IN_PAR =  15 / 16  (PAR / SAR)
+###                     IN_DAR =   4 / 3   (DAR)
+###
+#------------------------------------------------------------------------------#
+### Hier wird versucht dort zu interpolieren, wo es erforderlich ist.
+### Es kann jedoch von den vier Werten (Breite+Höhe+DAR+PAR) nur einer
+### mit Hilfe der drei vorhandenen Werte interpoliert werden.
+
+#------------------------------------------------------------------------------#
+### Rasterformat der Bildgröße
+
+#echo "
+#IST_XY='${IST_XY}'
+#IN_XY='${IN_XY}'
+#"
+
+if [ -n "${IST_XY}" ] ; then
+	IN_XY="${IST_XY}"
+fi
+
+#echo "
+#IST_XY='${IST_XY}'
+#IN_XY='${IN_XY}'
+#"
+#exit
+
+
+if [ -z "${IN_XY}" ] ; then
+	echo "Es konnte die Video-Auflösung nicht ermittelt werden."
+	echo "versuchen Sie es mit diesem Parameter nocheinmal:"
+	echo "-in_xmaly"
+	echo "z.B. (PAL)     : -in_xmaly 720x576"
+	echo "z.B. (NTSC)    : -in_xmaly 720x486"
+	echo "z.B. (NTSC-DVD): -in_xmaly 720x480"
+	echo "z.B. (HDTV)    : -in_xmaly 1280x720"
+	echo "z.B. (FullHD)  : -in_xmaly 1920x1080"
+	echo "ABBRUCH!"
+	exit 1
+fi
+
+IN_BREIT="$(echo "${IN_XY}" | awk -F'x' '{print $1}')"
+IN_HOCH="$(echo "${IN_XY}" | awk -F'x' '{print $2}')"
+
+
+#------------------------------------------------------------------------------#
+### gewünschtes Rasterformat der Bildgröße (Auflösung)
+
+if [ -n "${SOLL_XY}" ] ; then
+	SOLL_SCALE="scale=${SOLL_XY},"
+fi
+
+
+#------------------------------------------------------------------------------#
+### Seitenverhältnis des Bildes (DAR)
+
+if [ -n "${IST_DAR}" ] ; then
+	IN_DAR="${IST_DAR}"
+fi
+
+
+#----------------------------------------------------------------------#
+### Seitenverhältnis der Bildpunkte (PAR / SAR)
+
 if [ -n "${IST_PAR}" ] ; then
-	SCAN_PAR="${IST_PAR}"
-else
-	SCAN_PAR="$(echo "${MEDIAINFO}" | egrep '[PS]AR ' | sed 's/.*[PS]AR /PAR /' | awk '/PAR /{print $2}')"
+	IN_PAR="${IST_PAR}"
 fi
 
-PAR="$(echo "${SCAN_PAR}" | egrep '[:/]')"
-if [ -z "${PAR}" ] ; then
-	PAR="$(echo "${SCAN_PAR}" | fgrep '.')"
-	PAR_KOMMA="${PAR}"
-	PAR_FAKTOR="$(echo "${PAR}" | fgrep '.' | awk '{printf "%u\n", $1*100000}')"
-else
-	PAR_FAKTOR="$(echo "${PAR}" | egrep '[:/]' | awk -F'[:/]' '{printf "%u\n", ($1*100000)/$2}')"
-	PAR_KOMMA="$(echo "${PAR}" | egrep '[:/]' | awk -F'[:/]' '{print $1/$2}')"
+
+#----------------------------------------------------------------------#
+### Seitenverhältnis der Bildpunkte - Arbeitswerte berechnen (PAR / SAR)
+
+ARBEITSWERTE_PAR()
+{
+if [ -n "${IN_PAR}" ] ; then
+	PAR="$(echo "${IN_PAR}" | egrep '[:/]')"
+	if [ -n "${PAR}" ] ; then
+		PAR_KOMMA="$(echo "${PAR}" | egrep '[:/]' | awk -F'[:/]' '{print $1/$2}')"
+		PAR_FAKTOR="$(echo "${PAR}" | egrep '[:/]' | awk -F'[:/]' '{printf "%u\n", ($1*100000)/$2}')"
+	else
+		PAR="$(echo "${IN_PAR}" | fgrep '.')"
+		PAR_KOMMA="${PAR}"
+		PAR_FAKTOR="$(echo "${PAR}" | fgrep '.' | awk '{printf "%u\n", $1*100000}')"
+	fi
 fi
+}
+
+ARBEITSWERTE_PAR
+
+
+#------------------------------------------------------------------------------#
+### Kontrolle Seitenverhältnis des Bildes (DAR)
+
+if [ -z "${IN_DAR}" ] ; then
+	IN_DAR="$(echo "${IN_BREIT} ${IN_HOCH} ${PAR_KOMMA}" | awk '{printf("%.16f\n",$3/($2/$1))}')"
+fi
+
+
+if [ -z "${IN_DAR}" ] ; then
+	echo "Es konnte das Seitenverhältnis des Bildes nicht ermittelt werden."
+	echo "versuchen Sie es mit einem dieser beiden Parameter nocheinmal:"
+	echo "-in_dar"
+	echo "z.B. (Röhre)   : -in_dar 4:3"
+	echo "z.B. (Flat)    : -in_dar 16:9"
+	echo "-in_par"
+	echo "z.B. (PAL)     : -in_par 16:15"
+	echo "z.B. (NTSC)    : -in_par  9:10"
+	echo "z.B. (NTSC-DVD): -in_par  8:9"
+	echo "z.B. (DVB/DVD) : -in_par 64:45"
+	echo "z.B. (BluRay)  : -in_par  1:1"
+	echo "ABBRUCH!"
+	exit 1
+fi
+
+
+#----------------------------------------------------------------------#
+### Seitenverhältnis der Bildes - Arbeitswerte berechnen (DAR)
+
+DAR="$(echo "${IN_DAR}" | egrep '[:/]')"
+if [ -n "${DAR}" ] ; then
+	DAR_KOMMA="$(echo "${DAR}" | egrep '[:/]' | awk -F'[:/]' '{print $1/$2}')"
+	DAR_FAKTOR="$(echo "${DAR}" | egrep '[:/]' | awk -F'[:/]' '{printf "%u\n", ($1*100000)/$2}')"
+else
+	DAR="$(echo "${IN_DAR}" | fgrep '.')"
+	DAR_KOMMA="${DAR}"
+	DAR_FAKTOR="$(echo "${DAR}" | fgrep '.' | awk '{printf "%u\n", $1*100000}')"
+fi
+
+
+#----------------------------------------------------------------------#
+### Kontrolle Seitenverhältnis der Bildpunkte (PAR / SAR)
+
+if [ -z "${IN_PAR}" ] ; then
+	IN_PAR="$(echo "${IN_BREIT} ${IN_HOCH} ${DAR_KOMMA}" | awk '{printf "%.16f\n", ($2*$3)/$1}')"
+fi
+
+
+ARBEITSWERTE_PAR
 
 
 #echo "
-#SCAN_PAR='${SCAN_PAR}'
-#PAR='${PAR}'
+#IN_XY='${IN_XY}'
+#SOLL_XY='${SOLL_XY}'
+#IN_BREIT='${IN_BREIT}'
+#IN_HOCH='${IN_HOCH}'
+#IST_XY='${IST_XY}'
+#IST_DAR='${IST_DAR}'
 #IST_PAR='${IST_PAR}'
+#IN_DAR='${IN_DAR}'
+#DAR='${DAR}'
+#DAR_KOMMA='${DAR_KOMMA}'
+#DAR_FAKTOR='${DAR_FAKTOR}'
+#PAR='${PAR}'
 #PAR_KOMMA='${PAR_KOMMA}'
 #PAR_FAKTOR='${PAR_FAKTOR}'
 #"
 #exit
 
 
-if [ -z "${PAR_FAKTOR}" ] ; then
-	echo "Es konnte das Pixel-Format nicht ermittelt werden."
-	echo "versuchen Sie es mit diesem Parameter nocheinmal:"
-	echo "-par"
-	echo "z.B.: -par 64:45"
-	echo "ABBRUCH!"
-	exit 1
-fi
-
+#==============================================================================#
+### Bildausschnitt
 
 ### CROPing
 #
@@ -462,52 +611,20 @@ fi
 # von den Seiten die schwarzen Balken entfernen
 # crop=540:576:90:0
 #
-if [ -z "${CROP}" ] ; then
-	### Display-Seiten-Format
-	if [ -n "${IST_DAR}" ] ; then
-		SCAN_DAR="${IST_DAR}"
-	else
-		SCAN_DAR="$(echo "${MEDIAINFO}" | fgrep 'DAR ' | sed 's/.*DAR /DAR /' | awk '/DAR /{print $2}')"
-	fi
-
-	DAR="$(echo "${SCAN_DAR}" | egrep '[:/]')"
-	if [ -z "${DAR}" ] ; then
-		DAR="$(echo "${SCAN_DAR}" | fgrep '.')"
-		DAR_KOMMA="${DAR}"
-		DAR_FAKTOR="$(echo "${DAR}" | fgrep '.' | awk '{printf "%u\n", $1*100000}')"
-	else
-		DAR_KOMMA="$(echo "${DAR}" | egrep '[:/]' | awk -F'[:/]' '{print $1/$2}')"
-		DAR_FAKTOR="$(echo "${DAR}" | egrep '[:/]' | awk -F'[:/]' '{printf "%u\n", ($1*100000)/$2}')"
-	fi
-
-	WIDTH="$(echo "${IST_XY}" | awk -F'x' '{print $1}')"
-	HEIGHT="$(echo "${IST_XY}" | awk -F'x' '{print $2}')"
-else
+if [ -n "${CROP}" ] ; then
 	### CROP-Seiten-Format
 	# -vf crop=width:height:x:y
 	# -vf crop=in_w-100:in_h-100:100:100
-	WIDTH="$(echo "${CROP}" | awk -F'[:/]' '{print $1}')"
-	HEIGHT="$(echo "${CROP}" | awk -F'[:/]' '{print $2}')"
-	X="$(echo "${CROP}" | awk -F'[:/]' '{print $3}')"
-	Y="$(echo "${CROP}" | awk -F'[:/]' '{print $4}')"
+	IN_BREIT="$(echo "${CROP}" | awk -F'[:/]' '{print $1}')"
+	IN_HOCH="$(echo "${CROP}" | awk -F'[:/]' '{print $2}')"
+	#X="$(echo "${CROP}" | awk -F'[:/]' '{print $3}')"
+	#Y="$(echo "${CROP}" | awk -F'[:/]' '{print $4}')"
 
 	### Display-Seiten-Format
-	DAR_FAKTOR="$(echo "${PAR_FAKTOR} ${WIDTH} ${HEIGHT}" | awk '{printf "%u\n", ($1*$2)/$3}')"
+	DAR_FAKTOR="$(echo "${PAR_FAKTOR} ${IN_BREIT} ${IN_HOCH}" | awk '{printf "%u\n", ($1*$2)/$3}')"
 	DAR_KOMMA="$(echo "${DAR_FAKTOR}" | awk '{print $1/100000}')"
-	DAR="${DAR_KOMMA}"
 
 	CROP="crop=${CROP},"
-fi
-
-
-if [ -n "${IST_XmalY}" ] ; then
-	WIDTH="$(echo "${IST_XY}" | awk -F'x' '{print $1}')"
-	HEIGHT="$(echo "${IST_XY}" | awk -F'x' '{print $2}')"
-fi
-
-
-if [ -n "${SOLL_XmalY}" ] ; then
-	OUT_XY="scale=${SOLL_XmalY},"
 fi
 
 
@@ -515,19 +632,18 @@ fi
 # echo "breit hoch DAR" | awk '{a=$1*$2; b=sqrt(a/$3); h=a/b; printf "%.0f %.0f %.0f %.0f\n", b/2, h/2}' | awk '{print $1*2, $2*2}'
 # echo "720 576 1.3333" | awk '{a=$1*$2; b=sqrt(a/$3); h=a/b; printf "%.0f %.0f %.0f %.0f\n", $1, $2, b/2, h/2}' | awk '{b=$3*2; h=$4*2; print b"x"h, b/h, b*h, $1*$2}'
 # echo "720 576 1.7778" | awk '{a=$1*$2; b=sqrt(a/$3); h=a/b; printf "%.0f %.0f %.0f %.0f\n", $1, $2, b/2, h/2}' | awk '{b=$3*2; h=$4*2; print b"x"h, b/h, b*h, $1*$2}'
-# AUFLOESUNG="$(echo "${WIDTH} ${HEIGHT} ${DAR}" | awk '{a=$1*$2; b=sqrt(a/$3); h=a/b; printf "%.0f %.0f %.0f %.0f\n", b/2, h/2}' | awk '{print $1*2"x"$2*2}')"
+# QUADR_AUFLOESUNG="$(echo "${IN_BREIT} ${IN_HOCH} ${DAR_KOMMA}" | awk '{a=$1*$2; h=sqrt(a/$3); b=a/h; printf "%.0f %.0f\n", b/2, h/2}' | awk '{print $1*2"x"$2*2}')"
 #
 
 #echo "
 #IST_XY='${IST_XY}'
-#IST_XmalY='${IST_XmalY}'
-#SOLL_XmalY='${SOLL_XmalY}'
-#DAR='${DAR}'
+#SOLL_XY='${SOLL_XY}'
+#IST_DAR='${IST_DAR}'
 #DAR_FAKTOR='${DAR_FAKTOR}'
 #DAR_KOMMA='${DAR_KOMMA}'
 #PAR_KOMMA='${PAR_KOMMA}'
-#WIDTH='${WIDTH}'
-#HEIGHT='${HEIGHT}'
+#IN_BREIT='${IN_BREIT}'
+#IN_HOCH='${IN_HOCH}'
 #"
 #exit
 
@@ -545,28 +661,28 @@ fi
 if [ "${PAR_FAKTOR}" -ne "100000" ] ; then
 
 	# Umrechnung in quadratische Pixel - Version 1
-	#SCALE="scale=$(echo "${DAR_KOMMA} ${WIDTH} ${HEIGHT}" | awk '{b=sqrt($1*$2*$3); printf "%.0f %.0f\n", b/2, b/$1/2}' | awk '{print $1*2"x"$2*2}'),"
-	#SCALE="scale=$(echo "${WIDTH} ${HEIGHT} ${DAR_KOMMA}" | awk '{b=sqrt($1*$2*$3); printf "%.0f %.0f\n", b/2, b/$3/2}' | awk '{print $1*2"x"$2*2}'),"
+	#QUADR_SCALE="scale=$(echo "${DAR_KOMMA} ${IN_BREIT} ${IN_HOCH}" | awk '{b=sqrt($1*$2*$3); printf "%.0f %.0f\n", b/2, b/$1/2}' | awk '{print $1*2"x"$2*2}'),"
+	#QUADR_SCALE="scale=$(echo "${IN_BREIT} ${IN_HOCH} ${DAR_KOMMA}" | awk '{b=sqrt($1*$2*$3); printf "%.0f %.0f\n", b/2, b/$3/2}' | awk '{print $1*2"x"$2*2}'),"
 
 	# Umrechnung in quadratische Pixel - Version 2
-	HALBE_HOEHE="$(echo "${WIDTH} ${HEIGHT} ${DAR_KOMMA}" | awk '{h=sqrt($1*$2/$3); printf "%.0f\n", h/2}')"
-	SCALE="scale=$(echo "${HALBE_HOEHE} ${DAR_KOMMA}" | awk '{printf "%.0f %.0f\n", $1*$2, $1}' | awk '{print $1*2"x"$2*2}'),"
+	HALBE_HOEHE="$(echo "${IN_BREIT} ${IN_HOCH} ${DAR_KOMMA}" | awk '{h=sqrt($1*$2/$3); printf "%.0f\n", h/2}')"
+	QUADR_SCALE="scale=$(echo "${HALBE_HOEHE} ${DAR_KOMMA}" | awk '{printf "%.0f %.0f\n", $1*$2, $1}' | awk '{print $1*2"x"$2*2}'),"
 
 
-	S_BREITE="$(echo "${SCALE}" | sed 's/x/ /;s/^[^0-9][^0-9]*//;s/[^0-9][^0-9]*$//' | awk '{print $1}')"
-	S_HOCH="$(echo "${SCALE}" | sed 's/x/ /;s/^[^0-9][^0-9]*//;s/[^0-9][^0-9]*$//' | awk '{print $2}')"
+	QUADR_BREITE="$(echo "${QUADR_SCALE}" | sed 's/x/ /;s/^[^0-9][^0-9]*//;s/[^0-9][^0-9]*$//' | awk '{print $1}')"
+	QUADR_HOCH="$(echo "${QUADR_SCALE}" | sed 's/x/ /;s/^[^0-9][^0-9]*//;s/[^0-9][^0-9]*$//' | awk '{print $2}')"
 fi
 
 
 #echo "
 #DAR_KOMMA='${DAR_KOMMA}'
 #PAR_KOMMA='${PAR_KOMMA}'
-#WIDTH='${WIDTH}'
-#HEIGHT='${HEIGHT}'
-#SCALE='${SCALE}'
-#OUT_XY='${OUT_XY}'
-#S_BREITE='${S_BREITE}'
-#S_HOCH='${S_HOCH}'
+#IN_BREIT='${IN_BREIT}'
+#IN_HOCH='${IN_HOCH}'
+#QUADR_SCALE='${QUADR_SCALE}'
+#QUADR_BREITE='${QUADR_BREITE}'
+#QUADR_HOCH='${QUADR_HOCH}'
+#SOLL_SCALE='${SOLL_SCALE}'
 #-------------------------------
 #"
 #exit
@@ -591,26 +707,31 @@ fi
 # pad=640:480:0:40:violet
 # pad=width=640:height=480:x=0:y=40:color=violet
 #
-# SCHWARZ="$(echo "${HOEHE} ${BREITE} ${S_BREITE} ${S_HOCH}" | awk '{sw="oben"; if (($1/$2) < ($3/$4)) sw="oben"; print sw}')"
-# SCHWARZ="$(echo "${HOEHE} ${BREITE} ${S_BREITE} ${S_HOCH}" | awk '{sw="oben"; if (($1/$2) > ($3/$4)) sw="links"; print sw}')"
+# SCHWARZ="$(echo "${HOEHE} ${BREITE} ${QUADR_BREITE} ${QUADR_HOCH}" | awk '{sw="oben"; if (($1/$2) < ($3/$4)) sw="oben"; print sw}')"
+# SCHWARZ="$(echo "${HOEHE} ${BREITE} ${QUADR_BREITE} ${QUADR_HOCH}" | awk '{sw="oben"; if (($1/$2) > ($3/$4)) sw="links"; print sw}')"
 #
 PAD="pad='max(iw\\,ih*(${HOEHE}/${BREITE})):ow/(${HOEHE}/${BREITE}):(ow-iw)/2:(oh-ih)/2',"
 
-VIDEOOPTION="-crf ${AVC_CRF} -vf ${ZEILENSPRUNG}${CROP}${SCALE}${PAD}${OUT_XY}setsar='1/1'"
+VIDEOOPTION="-crf ${AVC_CRF} -vf ${ZEILENSPRUNG}${CROP}${QUADR_SCALE}${PAD}${SOLL_SCALE}setsar='1/1'"
 
 START_MP4_FORMAT="-f ${FORMAT}"
 
+
+echo "
+${VIDEOOPTION}
+"
+
+
 #echo "
-#IST_XmalY='${IST_XmalY}'
-#SOLL_XmalY='${SOLL_XmalY}'
+#SOLL_XY='${SOLL_XY}'
 #DAR_KOMMA='${DAR_KOMMA}'
 #DAR_FAKTOR='${DAR_FAKTOR}'
 #PAR_KOMMA='${PAR_KOMMA}'
 #PAR_FAKTOR='${PAR_FAKTOR}'
 #SCHWARZ='${SCHWARZ}'
-#WIDTH='${WIDTH}'
-#HEIGHT='${HEIGHT}'
-#SCALE='${SCALE}'
+#IN_BREIT='${IN_BREIT}'
+#IN_HOCH='${IN_HOCH}'
+#QUADR_SCALE='${QUADR_SCALE}'
 #HOEHE='${HOEHE}'
 #BREITE='${BREITE}'
 #${PROGRAMM}
@@ -626,6 +747,7 @@ START_MP4_FORMAT="-f ${FORMAT}"
 #-y ${MP4NAME}.${ENDUNG}
 #"
 #exit
+
 
 #==============================================================================#
 

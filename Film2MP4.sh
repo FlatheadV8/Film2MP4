@@ -648,7 +648,7 @@ fi
 #exit
 
 
-if [ -z "${DAR_FAKTOR}" ] ; then
+if [ "${DAR_FAKTOR}" -eq 0 ] ; then
 	echo "Es konnte das Display-Format nicht ermittelt werden."
 	echo "versuchen Sie es mit diesem Parameter nocheinmal:"
 	echo "-dar"

@@ -13,8 +13,11 @@
 #
 #------------------------------------------------------------------------------#
 
-VERSION="v2016051601"
+#set -x
 
+VERSION="v2016091900"
+
+#set -x
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 TONQUALIT="3"
@@ -178,6 +181,11 @@ done
 ### Trivialitäts-Check
 
 #------------------------------------------------------------------------------#
+
+if [ ! -r "${FILMDATEI}" ] ; then
+        echo "Der Film '${FILMDATEI}' konnte nicht gefunden werdeN. Abbruch!"
+        exit 1
+fi
 
 if [ -z "${TONSPUR}" ] ; then
         TONSPUR=0	# die erste Tonspur ist "0"
@@ -396,10 +404,25 @@ esac
 ### IN-Daten (META-Daten) aus der Filmdatei lesen
 
 #------------------------------------------------------------------------------#
+# Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '79613_Fluch_der_Karibik_13.09.14_20-15_orf1_130_TVOON_DE.mpg.HQ.cut.mp4':
+#     Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt470bg), 720x576 [SAR 64:45 DAR 16:9], 816 kb/s, 25 fps, 25 tbr, 100 tbn, 50 tbc (default)
+#------------------------------------------------------------------------------#
+# Input #0, matroska,webm, from 'Fluch_der_Karibik_1_Der_Fluch_der_Black_Pearl_-_Pirates_of_the_Caribbean_The_Curse_of_the_Black_Pearl/Fluch_der_Karibik_1.mkv':
+#     Stream #0:0(eng): Video: h264 (High), yuv420p, 1920x816, SAR 1:1 DAR 40:17, 23.98 fps, 23.98 tbr, 1k tbn, 47.95 tbc (default)
+#------------------------------------------------------------------------------#
+# ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[\[,\]]' '\n' | egrep -B1 'SAR |DAR ' | tr -s '\n' ' ' ; echo ; done
+#  720x576 SAR 64:45 DAR 16:9
+#  1920x816 SAR 1:1 DAR 40:17
+#------------------------------------------------------------------------------#
 ### Video
 
 ### hier wird ermittelt, ob der film progressiv oder im Zeilensprungverfahren vorliegt
-MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[]' ' ' | tr -s ',' '\n')"
+#echo "--------------------------------------------------------------------------------"
+#probe "${FILMDATEI}" 2>&1 | fgrep Video:
+#echo "--------------------------------------------------------------------------------"
+#MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[]' ' ' | tr -s ',' '\n')"
+#MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[\[,\]]' '\n' | egrep -B1 'SAR |DAR ' | tr -s '\n' ' ')"
+MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[\[,\]]' '\n' | egrep '[0-9]x[0-9]|SAR |DAR ' | fgrep -v 'Stream #' | tr -s '\n' ' ')"
 # tbn (FPS vom Container)= the time base in AVStream that has come from the container
 # tbc (FPS vom Codec) = the time base in AVCodecContext for the codec used for a particular stream
 # tbr (FPS vom Video-Stream geraten) = tbr is guessed from the video stream and is the value users want to see when they look for the video frame rate
@@ -421,6 +444,7 @@ IN_DAR="$(echo "${MEDIAINFO}" | fgrep ' DAR ' | awk '{print $5}')"
 
 #echo "
 #MEDIAINFO='${MEDIAINFO}'
+##----
 #IN_XY='${IN_XY}'
 #IN_PAR='${IN_PAR}'
 #IN_DAR='${IN_DAR}'
@@ -648,7 +672,7 @@ fi
 #exit
 
 
-if [ "${DAR_FAKTOR}" -eq 0 ] ; then
+if [ -z "${DAR_FAKTOR}" ] ; then
 	echo "Es konnte das Display-Format nicht ermittelt werden."
 	echo "versuchen Sie es mit diesem Parameter nocheinmal:"
 	echo "-dar"
@@ -751,11 +775,35 @@ ${VIDEOOPTION}
 
 #==============================================================================#
 
+STREAM_AUDIO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep ' Stream ' | fgrep Audio:)"
+STREAMAUDIO="$(echo "${STREAM_AUDIO}" | wc -w | awk '{print $1}')"
+
+if [ "${STREAMAUDIO}" -gt 0 ] ; then
+	AUDIO_VERARBEITUNG_01="-map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION}"
+	AUDIO_VERARBEITUNG_02="-c:a copy"
+else
+	AUDIO_VERARBEITUNG_01="-an"
+	AUDIO_VERARBEITUNG_02="-an"
+fi
+
+#echo "
+#STREAM_AUDIO='${STREAM_AUDIO}'
+#STREAMAUDIO='${STREAMAUDIO}'
+#AUDIO_VERARBEITUNG_01='${AUDIO_VERARBEITUNG_01}'
+#AUDIO_VERARBEITUNG_02='${AUDIO_VERARBEITUNG_02}'
+#"
+#exit
+
+#==============================================================================#
+
+rm -f ${MP4NAME}.txt
+echo "${0} $@" > ${MP4NAME}.txt
+
 if [ -z "${SCHNITTZEITEN}" ] ; then
 	echo
-	echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}"
+	echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}" | tee -a ${MP4NAME}.txt
 	echo
-	${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG} 2>&1
+	${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG} 2>&1
 else
 	#echo "SCHNITTZEITEN=${SCHNITTZEITEN}"
 	#exit
@@ -769,9 +817,9 @@ else
 		DAUER="$(echo "${_SCHNITT}" | tr -d '"' | awk -F'-' '{print $2 - $1}')"
 
 		echo
-		echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION} -ss ${VON} -t ${DAUER} -f matroska -y ${ZUFALL}_${NUMMER}_${MP4NAME}.mkv"
+		echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} -ss ${VON} -t ${DAUER} -f matroska -y ${ZUFALL}_${NUMMER}_${MP4NAME}.mkv" | tee -a ${MP4NAME}.txt
 		echo
-		${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION} -ss ${VON} -t ${DAUER} -f matroska -y ${ZUFALL}_${NUMMER}_${MP4NAME}.mkv 2>&1
+		${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} -ss ${VON} -t ${DAUER} -f matroska -y ${ZUFALL}_${NUMMER}_${MP4NAME}.mkv 2>&1
 		echo "---------------------------------------------------------"
 	done
 
@@ -780,8 +828,8 @@ else
 	mkvmerge -o ${ZUFALL}_${MP4NAME}.mkv ${FILM_TEILE}
 
 	# den vertigen Film aus dem MKV-Format in das MP$-Format umwandeln
-	echo "${PROGRAMM} -i ${ZUFALL}_${MP4NAME}.mkv -c:v copy -c:a copy ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}"
-	${PROGRAMM} -i ${ZUFALL}_${MP4NAME}.mkv -c:v copy -c:a copy ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}
+	echo "${PROGRAMM} -i ${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}"
+	${PROGRAMM} -i ${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}
 
 	#ls -lh ${ZUFALL}_*_${MP4NAME}.mkv ${ZUFALL}_${MP4NAME}.mkv
 	#echo "rm -f ${ZUFALL}_*_${MP4NAME}.mkv ${ZUFALL}_${MP4NAME}.mkv"
@@ -793,5 +841,5 @@ fi
 #"
 #------------------------------------------------------------------------------#
 
-ls -lh ${MP4NAME}.${ENDUNG}
+ls -lh ${MP4NAME}.${ENDUNG} ${MP4NAME}.txt
 exit

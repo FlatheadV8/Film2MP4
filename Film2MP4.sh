@@ -15,7 +15,7 @@
 
 #set -x
 
-VERSION="v2016091900"
+VERSION="v2017050600"
 
 #set -x
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -183,7 +183,7 @@ done
 #------------------------------------------------------------------------------#
 
 if [ ! -r "${FILMDATEI}" ] ; then
-        echo "Der Film '${FILMDATEI}' konnte nicht gefunden werdeN. Abbruch!"
+        echo "Der Film '${FILMDATEI}' konnte nicht gefunden werden. Abbruch!"
         exit 1
 fi
 
@@ -191,10 +191,23 @@ if [ -z "${TONSPUR}" ] ; then
         TONSPUR=0	# die erste Tonspur ist "0"
 fi
 
+#------------------------------------------------------------------------------#
 # damit die Zieldatei mit Verzeichnis angegeben werden kann
+
 MP4VERZ="$(dirname ${MP4PFAD})"
-cd ${MP4VERZ}/ || exit 1
 MP4DATEI="$(basename ${MP4PFAD})"
+
+#------------------------------------------------------------------------------#
+# damit man erkennt welche Tonspur aus dem Original verwendet wurde
+
+if [ -z "${TSNAME}" ] ; then
+        MP4DATEI="$(echo "${MP4DATEI} ${TSNAME}" | rev | sed 's/[.]/ /' | rev | awk '{print $1"."$2}')"
+else
+        MP4DATEI="$(echo "${MP4DATEI} ${TSNAME}" | rev | sed 's/[.]/ /' | rev | awk '{print $1"_-_Tonspur_"$3"."$2}')"
+fi
+
+#------------------------------------------------------------------------------#
+# damit keine Leerzeichen im Dateinamen enthalten sind
 
 case "${MP4DATEI}" in
         [a-zA-Z0-9\_\-\+/][a-zA-Z0-9\_\-\+/]*[.][Mm][Pp][4])
@@ -211,19 +224,22 @@ case "${MP4DATEI}" in
 esac
 
 #------------------------------------------------------------------------------#
+# Test
 
-if [ -z "${TSNAME}" ] ; then
-        MP4DATEI="$(echo "${MP4DATEI} ${TSNAME}" | rev | sed 's/[.]/ /' | rev | awk '{print $1"."$2}')"
-else
-        MP4DATEI="$(echo "${MP4DATEI} ${TSNAME}" | rev | sed 's/[.]/ /' | rev | awk '{print $1"_-_Tonspur_"$3"."$2}')"
-fi
+#echo "
+#MP4VERZ='${MP4VERZ}'
+#MP4DATEI='${MP4DATEI}'
+#MP4NAME='${MP4NAME}'
+#"
+#exit
 
 #------------------------------------------------------------------------------#
 ### Audio-Unterstützung pro Betriebssystem
 
 if [ "FreeBSD" = "$(uname -s)" ] ; then
         #AUDIOCODEC="libmp3lame"
-        AUDIOCODEC="libfaac"    # "non-free"-Lizenz; funktioniert aber
+        AUDIOCODEC="libfdk_aac"    # "non-free"-Lizenz; funktioniert aber
+        #AUDIOCODEC="libfaac"    # "non-free"-Lizenz; funktioniert aber
         #AUDIOCODEC="aac -strict experimental"
         #AUDIOCODEC="aac"       # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
 elif [ "Linux" = "$(uname -s)" ] ; then
@@ -768,7 +784,7 @@ ${VIDEOOPTION}
 #-c:a ${AUDIOCODEC}
 #${AUDIOOPTION}
 #${START_MP4_FORMAT}
-#-y ${MP4NAME}.${ENDUNG}
+#-y ${MP4VERZ}/${MP4NAME}.${ENDUNG}
 #"
 #exit
 
@@ -796,14 +812,14 @@ fi
 
 #==============================================================================#
 
-rm -f ${MP4NAME}.txt
-echo "${0} $@" > ${MP4NAME}.txt
+rm -f ${MP4VERZ}/${MP4NAME}.txt
+echo "${0} $@" > ${MP4VERZ}/${MP4NAME}.txt
 
 if [ -z "${SCHNITTZEITEN}" ] ; then
 	echo
-	echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}" | tee -a ${MP4NAME}.txt
+	echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}" | tee -a ${MP4VERZ}/${MP4NAME}.txt
 	echo
-	${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG} 2>&1
+	${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG} 2>&1
 else
 	#echo "SCHNITTZEITEN=${SCHNITTZEITEN}"
 	#exit
@@ -817,29 +833,29 @@ else
 		DAUER="$(echo "${_SCHNITT}" | tr -d '"' | awk -F'-' '{print $2 - $1}')"
 
 		echo
-		echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} -ss ${VON} -t ${DAUER} -f matroska -y ${ZUFALL}_${NUMMER}_${MP4NAME}.mkv" | tee -a ${MP4NAME}.txt
+		echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} -ss ${VON} -t ${DAUER} -f matroska -y ${MP4VERZ}/${ZUFALL}_${NUMMER}_${MP4NAME}.mkv" | tee -a ${MP4VERZ}/${MP4NAME}.txt
 		echo
-		${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} -ss ${VON} -t ${DAUER} -f matroska -y ${ZUFALL}_${NUMMER}_${MP4NAME}.mkv 2>&1
+		${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} -ss ${VON} -t ${DAUER} -f matroska -y ${MP4VERZ}/${ZUFALL}_${NUMMER}_${MP4NAME}.mkv 2>&1
 		echo "---------------------------------------------------------"
 	done
 
-	FILM_TEILE="$(ls -1 ${ZUFALL}_*_${MP4NAME}.mkv | tr -s '\n' '|' | sed 's/|/ + /g;s/ + $//')"
-	echo "# mkvmerge -o '${ZUFALL}_${MP4NAME}.mkv' '${FILM_TEILE}'"
-	mkvmerge -o ${ZUFALL}_${MP4NAME}.mkv ${FILM_TEILE}
+	FILM_TEILE="$(ls -1 ${MP4VERZ}/${ZUFALL}_*_${MP4NAME}.mkv | tr -s '\n' '|' | sed 's/|/ + /g;s/ + $//')"
+	echo "# mkvmerge -o '${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv' '${FILM_TEILE}'"
+	mkvmerge -o ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv ${FILM_TEILE}
 
 	# den vertigen Film aus dem MKV-Format in das MP$-Format umwandeln
-	echo "${PROGRAMM} -i ${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}"
-	${PROGRAMM} -i ${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}
+	echo "${PROGRAMM} -i ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}"
+	${PROGRAMM} -i ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}
 
-	#ls -lh ${ZUFALL}_*_${MP4NAME}.mkv ${ZUFALL}_${MP4NAME}.mkv
-	#echo "rm -f ${ZUFALL}_*_${MP4NAME}.mkv ${ZUFALL}_${MP4NAME}.mkv"
-	rm -f ${ZUFALL}_*_${MP4NAME}.mkv ${ZUFALL}_${MP4NAME}.mkv
+	#ls -lh ${MP4VERZ}/${ZUFALL}_*_${MP4NAME}.mkv ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv
+	#echo "rm -f ${MP4VERZ}/${ZUFALL}_*_${MP4NAME}.mkv ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv"
+	rm -f ${MP4VERZ}/${ZUFALL}_*_${MP4NAME}.mkv ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv
 fi
 
 #echo "
-#${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION} ${START_MP4_FORMAT} -y ${MP4NAME}.${ENDUNG}
+#${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}
 #"
 #------------------------------------------------------------------------------#
 
-ls -lh ${MP4NAME}.${ENDUNG} ${MP4NAME}.txt
+ls -lh ${MP4VERZ}/${MP4NAME}.${ENDUNG} ${MP4VERZ}/${MP4NAME}.txt
 exit

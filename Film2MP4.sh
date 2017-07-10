@@ -15,7 +15,7 @@
 
 #set -x
 
-VERSION="v2017050600"
+VERSION="v2017071000"
 
 #set -x
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -246,7 +246,7 @@ elif [ "Linux" = "$(uname -s)" ] ; then
         #AUDIOCODEC="libmp3lame"
         #AUDIOCODEC="libfaac"   # "non-free"-Lizenz; funktioniert aber (nur mit www.medibuntu.org)
         #AUDIOCODEC="aac -strict experimental"   # das funktioniert ohne www.medibuntu.org
-        AUDIOCODEC="aac"        # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
+        AUDIOCODEC="aac -strict -2"        # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
 fi
 
 #==============================================================================#

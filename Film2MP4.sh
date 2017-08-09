@@ -13,12 +13,14 @@
 #
 #------------------------------------------------------------------------------#
 
-VERSION="v2017080700"
+#VERSION="v2016091900"
+VERSION="v2017071200"
 
 #set -x
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-TONQUALIT="3"
+#TONQUALIT="3"
+TONQUALIT="5"
 AUDIO_SAMPLERATE="-ar 44100"
 
 BILDQUALIT="5"
@@ -244,7 +246,7 @@ elif [ "Linux" = "$(uname -s)" ] ; then
         #AUDIOCODEC="libmp3lame"
         #AUDIOCODEC="libfaac"   # "non-free"-Lizenz; funktioniert aber (nur mit www.medibuntu.org)
         #AUDIOCODEC="aac -strict experimental"   # das funktioniert ohne www.medibuntu.org
-        AUDIOCODEC="aac -strict -2"        # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
+        AUDIOCODEC="aac"        # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
 fi
 
 #==============================================================================#
@@ -436,7 +438,7 @@ esac
 #echo "--------------------------------------------------------------------------------"
 #MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[]' ' ' | tr -s ',' '\n')"
 #MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | tr -s '[\[,\]]' '\n' | egrep -B1 'SAR |DAR ' | tr -s '\n' ' ')"
-MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | sed 's/.* Video:/Video:/' | tr -s '[\[,\]]' '\n' | egrep -v ' 0x[0-9]' | egrep '[0-9]x[0-9]|SAR |DAR ' | fgrep -v 'Stream #' | tr -s '\n' ' ')"
+MEDIAINFO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | sed 's/.* Video:/Video:/' | tr -s '[\[,\]]' '\n' | egrep '[0-9]x[0-9]|SAR |DAR ' | fgrep -v 'Stream #' | tr -s '\n' ' ')"
 # tbn (FPS vom Container)= the time base in AVStream that has come from the container
 # tbc (FPS vom Codec) = the time base in AVCodecContext for the codec used for a particular stream
 # tbr (FPS vom Video-Stream geraten) = tbr is guessed from the video stream and is the value users want to see when they look for the video frame rate

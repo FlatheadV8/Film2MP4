@@ -13,7 +13,7 @@
 #
 #------------------------------------------------------------------------------#
 
-VERSION="v2017081100"
+VERSION="v2017102900"
 
 #set -x
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -93,6 +93,10 @@ while [ "${#}" -ne "0" ]; do
                         CROP="${2}"		# zum Beispiel zum entfernen der schwarzen Balken
                         shift
                         ;;
+                -u)
+                        UNTERTITEL="-map 0:s:${2} -scodec copy"		# "0" für die erste Untertitelspur
+                        shift
+                        ;;
                 -h)
                         echo "HILFE:
         # Video- und Audio-Spur in ein HTML5-kompatibles Format transkodieren
@@ -104,6 +108,9 @@ while [ "${#}" -ne "0" ]; do
 
         # ein Beispiel mit minimaler Anzahl an Parametern
         ${0} -q Film.avi -z Film.mp4
+
+        # ein Beispiel, bei dem auch die erste Untertitelspur (Zählweise beginnt mit "0"!) mit übernommen wird
+        ${0} -q Film.avi -u 0 -z Film.mp4
 
         # Es duerfen in den Dateinamen keine Leerzeichen, Sonderzeichen
         # oder Klammern enthalten sein!
@@ -259,6 +266,20 @@ fi
 if [ -z "${PROGRAMM}" ] ; then
         echo "Weder avconv noch ffmpeg konnten gefunden werden. Abbruch!"
         exit 1
+fi
+
+#==============================================================================#
+### Untertitel
+
+unset U_TITEL_MKV
+if [ -n "${UNTERTITEL}" ] ; then
+        echo "${UNTERTITEL}" | egrep '0:s:[0-9]' >/dev/null || export U_TITEL=Fehler
+        U_TITEL_MKV="-map 0:s:0 -scodec copy"
+	if [ "${U_TITEL}" = "Fehler" ] ; then
+        	echo "Für die Untertitelspur muss eine Zahl angegeben werden. Abbruch!"
+        	echo "z.B.: ${0} -q Film.avi -u 0 -z Film.mp4"
+        	exit 1
+	fi
 fi
 
 #==============================================================================#
@@ -820,7 +841,7 @@ if [ -z "${SCHNITTZEITEN}" ] ; then
 	echo
 	echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}" | tee -a ${MP4VERZ}/${MP4NAME}.txt
 	echo
-	${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG} 2>&1
+	${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${UNTERTITEL} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG} 2>&1
 else
 	#echo "SCHNITTZEITEN=${SCHNITTZEITEN}"
 	#exit
@@ -836,7 +857,7 @@ else
 		echo
 		echo "${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} -ss ${VON} -t ${DAUER} -f matroska -y ${MP4VERZ}/${ZUFALL}_${NUMMER}_${MP4NAME}.mkv" | tee -a ${MP4VERZ}/${MP4NAME}.txt
 		echo
-		${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} -ss ${VON} -t ${DAUER} -f matroska -y ${MP4VERZ}/${ZUFALL}_${NUMMER}_${MP4NAME}.mkv 2>&1
+		${PROGRAMM} -i "${FILMDATEI}" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${UNTERTITEL} -ss ${VON} -t ${DAUER} -f matroska -y ${MP4VERZ}/${ZUFALL}_${NUMMER}_${MP4NAME}.mkv 2>&1
 		echo "---------------------------------------------------------"
 	done
 
@@ -846,7 +867,7 @@ else
 
 	# den vertigen Film aus dem MKV-Format in das MP$-Format umwandeln
 	echo "${PROGRAMM} -i ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}"
-	${PROGRAMM} -i ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}
+	${PROGRAMM} -i ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_MKV} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}
 
 	#ls -lh ${MP4VERZ}/${ZUFALL}_*_${MP4NAME}.mkv ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv
 	#echo "rm -f ${MP4VERZ}/${ZUFALL}_*_${MP4NAME}.mkv ${MP4VERZ}/${ZUFALL}_${MP4NAME}.mkv"
@@ -854,7 +875,7 @@ else
 fi
 
 #echo "
-#${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}
+#${PROGRAMM} -i \"${FILMDATEI}\" -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TONSPUR} -c:a ${AUDIOCODEC} ${AUDIOOPTION} ${UNTERTITEL} ${START_MP4_FORMAT} -y ${MP4VERZ}/${MP4NAME}.${ENDUNG}
 #"
 #------------------------------------------------------------------------------#
 

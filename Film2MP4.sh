@@ -305,12 +305,8 @@ fi
 #------------------------------------------------------------------------------#
 ### Audio-Unterstützung pro Betriebssystem
 
-if [ "FreeBSD" = "$(uname -s)" ] ; then
-        AUDIOCODEC="libfdk_aac"  # laut Debian "non-free"-Lizenz / laut FSF,Fedora,RedHat "free"-Lizenz / 2018-05-10 FreeBSD 11 FDK-AAC Version 0.1.5
-        #AUDIOCODEC="libfaac"    # "non-free"-Lizenz; funktioniert aber
-        #AUDIOCODEC="aac"        # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
-elif [ "Linux" = "$(uname -s)" ] ; then
-        #AUDIOCODEC="libfaac"    # "non-free"-Lizenz; funktioniert aber (nur mit www.medibuntu.org)
+AUDIOCODEC="$(ffmpeg -formats 2>&1 | tr -s ' ' '\n' | egrep -v '[A-Z]' | egrep '[-][-]enable[-]' | sed 's/^[-]*enable[-]*//' | fgrep aac)"
+if [ "x${AUDIOCODEC}" = "x" ] ; then
         AUDIOCODEC="aac"         # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
 fi
 
@@ -352,70 +348,70 @@ case "${TONQUALIT}" in
                 FF_AAC_VBR="-q:a 0.1"
                 FDK_AAC_VBR="-vbr 1"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 64k"
-                ALLE_AAC_ABR_2+x="-b:a 160k"
+                ALLE_AAC_ABR_2x="-b:a 160k"
                 ;;
         1)
                 FAAC_VBR="-q:a 64"
                 FF_AAC_VBR="-q:a 0.3"
                 FDK_AAC_VBR="-vbr 2"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 80k"
-                ALLE_AAC_ABR_2+x="-b:a 184k"
+                ALLE_AAC_ABR_2x="-b:a 184k"
                 ;;
         2)
                 FAAC_VBR="-q:a 120"
                 FF_AAC_VBR="-q:a 0.5"
                 FDK_AAC_VBR="-vbr 3"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 88k"
-                ALLE_AAC_ABR_2+x="-b:a 216k"
+                ALLE_AAC_ABR_2x="-b:a 216k"
                 ;;
         3)
                 FAAC_VBR="-q:a 174"
                 FF_AAC_VBR="-q:a 0.7"
                 FDK_AAC_VBR="-vbr 4"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 112k"
-                ALLE_AAC_ABR_2+x="-b:a 256k"
+                ALLE_AAC_ABR_2x="-b:a 256k"
                 ;;
         4)
                 FAAC_VBR="-q:a 228"
                 FF_AAC_VBR="-q:a 1.0"
                 FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 128k"
-                ALLE_AAC_ABR_2+x="-b:a 296k"
+                ALLE_AAC_ABR_2x="-b:a 296k"
                 ;;
         5)
                 FAAC_VBR="-q:a 282"
                 FF_AAC_VBR="-q:a 1.2"
                 FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 160k"
-                ALLE_AAC_ABR_2+x="-b:a 344k"
+                ALLE_AAC_ABR_2x="-b:a 344k"
                 ;;
         6)
                 FAAC_VBR="-q:a 336"
                 FF_AAC_VBR="-q:a 1.4"
                 FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 284k"
-                ALLE_AAC_ABR_2+x="-b:a 400k"
+                ALLE_AAC_ABR_2x="-b:a 400k"
                 ;;
         7)
                 FAAC_VBR="-q:a 392"
                 FF_AAC_VBR="-q:a 1.6"
                 FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 224k"
-                ALLE_AAC_ABR_2+x="-b:a 472k"
+                ALLE_AAC_ABR_2x="-b:a 472k"
                 ;;
         8)
                 FAAC_VBR="-q:a 446"
                 FF_AAC_VBR="-q:a 1.8"
                 FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 264k"
-                ALLE_AAC_ABR_2+x="-b:a 552k"
+                ALLE_AAC_ABR_2x="-b:a 552k"
                 ;;
         9)
                 FAAC_VBR="-q:a 500"
                 FF_AAC_VBR="-q:a 2"
                 FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
                 ALLE_AAC_ABR="-b:a 320k"
-                ALLE_AAC_ABR_2+x="-b:a 640k"
+                ALLE_AAC_ABR_2x="-b:a 640k"
                 ;;
 esac
 
@@ -426,7 +422,7 @@ AUDIO_KANAELE="$(ffprobe -show_data -show_streams "${FILMDATEI}" 2>/dev/null | s
 # bei mehr als 2 Audio-Kanälen wird von 5.1 ausgegangen
 # Diese Änderung hat nur bei ABR (durchschnittlicher Audio-Bit-Rate) Wirkung.
 if [ "${AUDIO_KANAELE}" -gt 2 ] ; then
-	ALLE_AAC_ABR="${ALLE_AAC_ABR_2+x}"
+	ALLE_AAC_ABR="${ALLE_AAC_ABR_2x}"
 fi
 
 
@@ -453,7 +449,10 @@ fi
 #==============================================================================#
 ### Video
 
-VIDEOCODEC="libx264"
+VIDEOCODEC="$(ffmpeg -formats 2>&1 | tr -s ' ' '\n' | egrep -v '[A-Z]' | egrep '[-][-]enable[-]' | sed 's/^[-]*enable[-]*//' | fgrep 264)"
+if [ "x${VIDEOCODEC}" = "x" ] ; then
+	VIDEOCODEC="h264"	# interner Codec, funktioniert immer
+fi
 
 #------------------------------------------------------------------------------#
 # Bildqualität entsprechend dem Video-Encoder setzen
@@ -844,7 +843,7 @@ else
 	PAD="pad='max(iw\\,ih*(${HOEHE}/${BREITE})):ow/(${HOEHE}/${BREITE}):(ow-iw)/2:(oh-ih)/2',"
 fi
 
-VIDEOOPTION="-crf ${AVC_CRF} -vf ${ZEILENSPRUNG}${CROP}${QUADR_SCALE}${PAD}${SOLL_SCALE}setsar='1/1'"
+VIDEOOPTION="-crf ${AVC_CRF} -preset veryslow -profile:v high -tune film -vf ${ZEILENSPRUNG}${CROP}${QUADR_SCALE}${PAD}${SOLL_SCALE}setsar='1/1'"
 
 START_MP4_FORMAT="-f ${FORMAT}"
 

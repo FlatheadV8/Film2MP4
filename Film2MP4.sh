@@ -5,6 +5,11 @@
 # Mit diesem Skript kann man einen Film in einen HTML5-kompatiblen "*.mp4"-Film
 # umwandeln, der z.B. vom FireFox ab "Version 35" inline abgespielt werden kann.
 #
+# Das Ergebnis besteht aus folgenden Formaten:
+#  - MP4-Container
+#  - AVC-Video-Codec (H.264)
+#  - AAC-Audio-Codec
+#
 # Es werden folgende Programme von diesem Skript verwendet:
 #  - ffmpeg
 #  - ffprobe
@@ -13,17 +18,14 @@
 #
 #------------------------------------------------------------------------------#
 
-VERSION="v2017102900"
+#VERSION="v2017102900"
+VERSION="v2018082600"
 
 #set -x
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-#TONQUALIT="3"
-TONQUALIT="5"
-AUDIO_SAMPLERATE="-ar 44100"
-
 BILDQUALIT="5"
-VIDEOCODEC="libx264"
+TONQUALIT="5"
 
 #
 # https://sites.google.com/site/linuxencoding/x264-ffmpeg-mapping
@@ -34,6 +36,8 @@ VIDEOCODEC="libx264"
 IFRAME="-keyint_min 2-8"
 
 LANG=C		# damit AWK richtig rechnet
+Film2MP4_OPTIONEN="${@}"
+ORIGINAL_PIXEL="Nein"
 
 #==============================================================================#
 
@@ -91,6 +95,15 @@ while [ "${#}" -ne "0" ]; do
                         ;;
                 -crop)
                         CROP="${2}"		# zum Beispiel zum entfernen der schwarzen Balken
+                        shift
+                        ;;
+                -test)
+                        ORIGINAL_PIXEL="Ja"		# um die richtigen CROP-Parameter ermitteln
+                        shift
+                        ;;
+                -t)
+                        echo '...statt "-t" bitte "-test" verwenden!'
+                        exit 1
                         shift
                         ;;
                 -u)
@@ -239,22 +252,6 @@ esac
 #"
 #exit
 
-#------------------------------------------------------------------------------#
-### Audio-Unterstützung pro Betriebssystem
-
-if [ "FreeBSD" = "$(uname -s)" ] ; then
-        #AUDIOCODEC="libmp3lame"
-        AUDIOCODEC="libfdk_aac"    # "non-free"-Lizenz; funktioniert aber
-        #AUDIOCODEC="libfaac"    # "non-free"-Lizenz; funktioniert aber
-        #AUDIOCODEC="aac -strict experimental"
-        #AUDIOCODEC="aac"       # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
-elif [ "Linux" = "$(uname -s)" ] ; then
-        #AUDIOCODEC="libmp3lame"
-        #AUDIOCODEC="libfaac"   # "non-free"-Lizenz; funktioniert aber (nur mit www.medibuntu.org)
-        #AUDIOCODEC="aac -strict experimental"   # das funktioniert ohne www.medibuntu.org
-        AUDIOCODEC="aac"        # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
-fi
-
 #==============================================================================#
 ### Programm
 
@@ -285,142 +282,200 @@ fi
 #==============================================================================#
 ### Qualitäts-Parameter-Übersetzung
 
-#------------------------------------------------------------------------------#
+#==============================================================================#
 ### Audio
+#
+### https://trac.ffmpeg.org/wiki/Encode/HighQualityAudio
+# sortiert nach Qualität (beste zuerst -> Stand 2017)
+#	- libopus	# kann als Vorbis-Nachfolger angesehen werden - 11. September 2012 Version 1.0 veröffentlicht - internationaler Offener Standard in RFC 6716
+#	- libvorbis	# als freier MP3-Ersatz entwickelt, Juli 2002 Version 1.0 veröffentlicht
+#	- libfdk_aac
+#	- aac		# ohne externe Bibliothek, erreicht man mit AAC die beste Qualität
+#	- libmp3lame	# seit Herbst 1998 ist das Verteilen oder Verkaufen von MP3-Audio-Codec-Software lizenzrechtlich geschützt
+#	- eac3/ac3
+#	- libtwolame
+#	- vorbis	# Hörtests ergaben transparente Ergebnisse ab 150 bis 170 kbit/s (Vorbis-Qualitätsstufe 5).
+#	- mp2
+#	- wmav2/wmav1
+#
+#   Seit 2017 verfügt FFmpeg über einen eigenen, nativen Opus-Encoder und -Decoder.
+#   ...ist der vielleicht besser als der native AAC-Encoder und -Decoder?
+#   Die Mobil-Plattform Android unterstützt ab Version 5 (Lollipop) Opus eingebettet in das Matroska-Containerformat nativ.
+
+#------------------------------------------------------------------------------#
+### Audio-Unterstützung pro Betriebssystem
+
+if [ "FreeBSD" = "$(uname -s)" ] ; then
+        AUDIOCODEC="libfdk_aac"  # laut Debian "non-free"-Lizenz / laut FSF,Fedora,RedHat "free"-Lizenz / 2018-05-10 FreeBSD 11 FDK-AAC Version 0.1.5
+        #AUDIOCODEC="libfaac"    # "non-free"-Lizenz; funktioniert aber
+        #AUDIOCODEC="aac"        # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
+elif [ "Linux" = "$(uname -s)" ] ; then
+        #AUDIOCODEC="libfaac"    # "non-free"-Lizenz; funktioniert aber (nur mit www.medibuntu.org)
+        AUDIOCODEC="aac"         # free-Lizenz; seit 05. Dez. 2015 nicht mehr experimentell
+fi
 
 ### Tonqualitaet entsprechend dem Audio-Encoder setzen
 #
-# https://trac.ffmpeg.org/wiki/Encode/AAC
+#
+### https://trac.ffmpeg.org/wiki/Encode/AAC
 # -> libfaac
 # erlaubte VBR-Bitraten (FAAC_VBR): -q:a 10-500 (~27k bis ~264k)
 # erlaubte ABR-Bitraten (FAAC_ABR): -b:a bis 152k
 #
-# -> aac
-# erlaubte VBR-Bitraten (AAC_VBR): -q:a 0.1 bis 2
-# erlaubte ABR-Bitraten (AAC_ABR): -b:a bis 152k
 #
-## -> libmp3lame
-## MP3 wir in Browsern schlechter unterstützt als AAC
-## https://trac.ffmpeg.org/wiki/Encode/MP3
-## erlaubte VBR-Bitraten (MP3_VBR): -q:a 9-0 (45-85k bis 220-260k)
-## erlaubte CBR-Bitraten (MP3_CBR): -b:a 8k-320k
+###
+# -> aac
+# erlaubte VBR-Bitraten (FF_AAC_VBR): -q:a 0.1 bis 2	# funktioniert leider noch nicht (August 2018)
+#
+# -c:a aac				-> Constant LC 128 Kbps (Standard)
+#
+#
+### https://trac.ffmpeg.org/wiki/Encode/AAC
+# -> fdk aac
+#    1   20-32  kbps/channel    LC,HE,HEv2
+#    2   32-40  kbps/channel    LC,HE,HEv2
+#    3   48-56  kbps/channel    LC,HE,HEv2
+#    4   64-72  kbps/channel    LC
+#    5   96-112 kbps/channel    LC
+#    FDK library officially supports sample rates for input of 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200 and 96000 Hz.
+# erlaubte VBR-Bitraten (FDK_AAC_VBR): -vbr 1 bis 5	# libfdk_aac -> Note, the VBR setting is unsupported and only works with some parameter combinations.
+# erlaubte ABR-Bitraten (FDK_AAC_ABR): -b:a 8 bis 800 kBit/s für jeden Kanal
+#
+# -c:a libfdk_aac -b:a 128k		-> Constant LC 128 Kbps (Standard)
+# -c:a libfdk_aac			-> Constant LC 229 Kbps
+# -c:a libfdk_aac -profile:a aac_low	-> Constant LC 140 Kbps
+#
 #
 case "${TONQUALIT}" in
         0)
-                MP3_VBR="-q:a 9 -ac 2"
-                MP3_CBR="-b:a 8k -ac 2"
                 FAAC_VBR="-q:a 10"
-                FAAC_ABR="-b:a 26k"
-                AAC_VBR="-q:a 0.1"
-                AAC_ABR="-b:a 26k"
+                FF_AAC_VBR="-q:a 0.1"
+                FDK_AAC_VBR="-vbr 1"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 64k"
+                ALLE_AAC_ABR_2+x="-b:a 160k"
                 ;;
         1)
-                MP3_VBR="-q:a 8 -ac 2"
-                MP3_CBR="-b:a 40k -ac 2"
                 FAAC_VBR="-q:a 64"
-                FAAC_ABR="-b:a 40k"
-                AAC_VBR="-q:a 0.3"
-                AAC_ABR="-b:a 40k"
+                FF_AAC_VBR="-q:a 0.3"
+                FDK_AAC_VBR="-vbr 2"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 80k"
+                ALLE_AAC_ABR_2+x="-b:a 184k"
                 ;;
         2)
-                MP3_VBR="-q:a 7 -ac 2"
-                MP3_CBR="-b:a 72k -ac 2"
                 FAAC_VBR="-q:a 120"
-                FAAC_ABR="-b:a 54k"
-                AAC_VBR="-q:a 0.5"
-                AAC_ABR="-b:a 54k"
+                FF_AAC_VBR="-q:a 0.5"
+                FDK_AAC_VBR="-vbr 3"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 88k"
+                ALLE_AAC_ABR_2+x="-b:a 216k"
                 ;;
         3)
-                MP3_VBR="-q:a 6 -ac 2"
-                MP3_CBR="-b:a 106k -ac 2"
                 FAAC_VBR="-q:a 174"
-                FAAC_ABR="-b:a 68k"
-                AAC_VBR="-q:a 0.7"
-                AAC_ABR="-b:a 68k"
+                FF_AAC_VBR="-q:a 0.7"
+                FDK_AAC_VBR="-vbr 4"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 112k"
+                ALLE_AAC_ABR_2+x="-b:a 256k"
                 ;;
         4)
-                MP3_VBR="-q:a 5 -ac 2"
-                MP3_CBR="-b:a 138k -ac 2"
                 FAAC_VBR="-q:a 228"
-                FAAC_ABR="-b:a 82k"
-                AAC_VBR="-q:a 1.0"
-                AAC_ABR="-b:a 82k"
+                FF_AAC_VBR="-q:a 1.0"
+                FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 128k"
+                ALLE_AAC_ABR_2+x="-b:a 296k"
                 ;;
         5)
-                MP3_VBR="-q:a 4 -ac 2"
-                MP3_CBR="-b:a 170k -ac 2"
                 FAAC_VBR="-q:a 282"
-                FAAC_ABR="-b:a 96k"
-                AAC_VBR="-q:a 1.2"
-                AAC_ABR="-b:a 96k"
+                FF_AAC_VBR="-q:a 1.2"
+                FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 160k"
+                ALLE_AAC_ABR_2+x="-b:a 344k"
                 ;;
         6)
-                MP3_VBR="-q:a 3 -ac 2"
-                MP3_CBR="-b:a 202k -ac 2"
                 FAAC_VBR="-q:a 336"
-                FAAC_ABR="-b:a 110k"
-                AAC_VBR="-q:a 1.4"
-                AAC_ABR="-b:a 110k"
+                FF_AAC_VBR="-q:a 1.4"
+                FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 284k"
+                ALLE_AAC_ABR_2+x="-b:a 400k"
                 ;;
         7)
-                MP3_VBR="-q:a 2 -ac 2"
-                MP3_CBR="-b:a 236k -ac 2"
                 FAAC_VBR="-q:a 392"
-                FAAC_ABR="-b:a 124k"
-                AAC_VBR="-q:a 1.6"
-                AAC_ABR="-b:a 124k"
+                FF_AAC_VBR="-q:a 1.6"
+                FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 224k"
+                ALLE_AAC_ABR_2+x="-b:a 472k"
                 ;;
         8)
-                MP3_VBR="-q:a 1 -ac 2"
-                MP3_CBR="-b:a 268k -ac 2"
                 FAAC_VBR="-q:a 446"
-                FAAC_ABR="-b:a 138k"
-                AAC_VBR="-q:a 1.8"
-                AAC_ABR="-b:a 138k"
+                FF_AAC_VBR="-q:a 1.8"
+                FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 264k"
+                ALLE_AAC_ABR_2+x="-b:a 552k"
                 ;;
         9)
-                MP3_VBR="-q:a 0 -ac 2"
-                MP3_CBR="-b:a 320k -ac 2"
                 FAAC_VBR="-q:a 500"
-                FAAC_ABR="-b:a 152k"
-                AAC_VBR="-q:a 2"
-                AAC_ABR="-b:a 152k"
+                FF_AAC_VBR="-q:a 2"
+                FDK_AAC_VBR="-vbr 5"		# Will man "VBR" verwenden, dann muss man explizit Tonkanäle, Bit-Rate und Saple-Rate in erlaubter Kombination angeben!
+                ALLE_AAC_ABR="-b:a 320k"
+                ALLE_AAC_ABR_2+x="-b:a 640k"
                 ;;
 esac
 
 
-if [ "${AUDIOCODEC}" = "libmp3lame" ] ; then
-                AUDIOOPTION="${MP3_VBR} ${AUDIO_SAMPLERATE}"
-                #AUDIOOPTION="${MP3_CBR} ${AUDIO_SAMPLERATE}"
+# max. Anzahl der vorhandenen Audio-Kanäle ermitteln
+AUDIO_KANAELE="$(ffprobe -show_data -show_streams "${FILMDATEI}" 2>/dev/null | sed -e '1,/^codec_type=audio/ d' | awk -F'=' '/^channels=/{print $2}' | sort -nr | head -n1)"
+
+# bei mehr als 2 Audio-Kanälen wird von 5.1 ausgegangen
+# Diese Änderung hat nur bei ABR (durchschnittlicher Audio-Bit-Rate) Wirkung.
+if [ "${AUDIO_KANAELE}" -gt 2 ] ; then
+	ALLE_AAC_ABR="${ALLE_AAC_ABR_2+x}"
+fi
+
+
+#AUDIO_SAMPLERATE="-ar 44100"
+
+if [ "${AUDIOCODEC}" = "libfdk_aac" ] ; then
+		#
+		# http://wiki.hydrogenaud.io/index.php?title=Fraunhofer_FDK_AAC#Recommended_Sampling_Rate_and_Bitrate_Combinations
+		#
+		# libfdk_aac -> Note, the VBR setting is unsupported and only works with some parameter combinations.
+		#
+		# FDK AAC kann im Modus "VBR" keine beliebige Kombination von Tonkanäle, Bit-Rate und Saple-Rate verarbeiten!
+		# Will man "VBR" verwenden, dann muss man explizit alle drei Parameter in erlaubter Größe angeben.
+                #AUDIOOPTION="${FDK_AAC_VBR}"
+                AUDIOOPTION="${ALLE_AAC_ABR}"
 elif [ "${AUDIOCODEC}" = "libfaac" ] ; then
                 AUDIOOPTION="${FAAC_VBR} ${AUDIO_SAMPLERATE}"
-                #AUDIOOPTION="${FAAC_ABR} ${AUDIO_SAMPLERATE}"
+                #AUDIOOPTION="${ALLE_AAC_ABR} ${AUDIO_SAMPLERATE}"
 elif [ "${AUDIOCODEC}" = "aac" ] ; then
-                AUDIOOPTION="${AAC_VBR} ${AUDIO_SAMPLERATE}"
-                #AUDIOOPTION="${AAC_ABR} ${AUDIO_SAMPLERATE}"
+                #AUDIOOPTION="${FF_AAC_VBR} ${AUDIO_SAMPLERATE}"
+                AUDIOOPTION="${ALLE_AAC_ABR} ${AUDIO_SAMPLERATE}"
 fi
+
+#==============================================================================#
+### Video
+
+VIDEOCODEC="libx264"
 
 #------------------------------------------------------------------------------#
 # Bildqualität entsprechend dem Video-Encoder setzen
 
 case "${BILDQUALIT}" in
         0)
-                AVC_CRF="34"
-                ;;
-        1)
                 AVC_CRF="32"
                 ;;
-        2)
+        1)
                 AVC_CRF="30"
                 ;;
-        3)
+        2)
                 AVC_CRF="28"
                 ;;
-        4)
+        3)
                 AVC_CRF="26"
                 ;;
-        5)
+        4)
                 AVC_CRF="24"
+                ;;
+        5)
+                AVC_CRF="23"
                 ;;
         6)
                 AVC_CRF="22"
@@ -436,7 +491,7 @@ case "${BILDQUALIT}" in
                 ;;
 esac
 
-#==============================================================================#
+#------------------------------------------------------------------------------#
 ### IN-Daten (META-Daten) aus der Filmdatei lesen
 
 #------------------------------------------------------------------------------#
@@ -450,7 +505,6 @@ esac
 #  720x576 SAR 64:45 DAR 16:9
 #  1920x816 SAR 1:1 DAR 40:17
 #------------------------------------------------------------------------------#
-### Video
 
 ### hier wird ermittelt, ob der film progressiv oder im Zeilensprungverfahren vorliegt
 #echo "--------------------------------------------------------------------------------"
@@ -551,8 +605,12 @@ IN_HOCH="$(echo "${IN_XY}" | awk -F'x' '{print $2}')"
 #------------------------------------------------------------------------------#
 ### gewünschtes Rasterformat der Bildgröße (Auflösung)
 
-if [ -n "${SOLL_XY}" ] ; then
-	SOLL_SCALE="scale=${SOLL_XY},"
+if [ "${ORIGINAL_PIXEL}" = Ja ] ; then
+	unset SOLL_SCALE
+else
+	if [ -n "${SOLL_XY}" ] ; then
+		SOLL_SCALE="scale=${SOLL_XY},"
+	fi
 fi
 
 
@@ -722,14 +780,22 @@ fi
 
 if [ "${PAR_FAKTOR}" -ne "100000" ] ; then
 
-	# Umrechnung in quadratische Pixel - Version 1
+	### Umrechnung in quadratische Pixel - Version 1
 	#QUADR_SCALE="scale=$(echo "${DAR_KOMMA} ${IN_BREIT} ${IN_HOCH}" | awk '{b=sqrt($1*$2*$3); printf "%.0f %.0f\n", b/2, b/$1/2}' | awk '{print $1*2"x"$2*2}'),"
 	#QUADR_SCALE="scale=$(echo "${IN_BREIT} ${IN_HOCH} ${DAR_KOMMA}" | awk '{b=sqrt($1*$2*$3); printf "%.0f %.0f\n", b/2, b/$3/2}' | awk '{print $1*2"x"$2*2}'),"
 
-	# Umrechnung in quadratische Pixel - Version 2
-	HALBE_HOEHE="$(echo "${IN_BREIT} ${IN_HOCH} ${DAR_KOMMA}" | awk '{h=sqrt($1*$2/$3); printf "%.0f\n", h/2}')"
-	QUADR_SCALE="scale=$(echo "${HALBE_HOEHE} ${DAR_KOMMA}" | awk '{printf "%.0f %.0f\n", $1*$2, $1}' | awk '{print $1*2"x"$2*2}'),"
-
+	### Umrechnung in quadratische Pixel - Version 2
+	#HALBE_HOEHE="$(echo "${IN_BREIT} ${IN_HOCH} ${DAR_KOMMA}" | awk '{h=sqrt($1*$2/$3); printf "%.0f\n", h/2}')"
+	#QUADR_SCALE="scale=$(echo "${HALBE_HOEHE} ${DAR_KOMMA}" | awk '{printf "%.0f %.0f\n", $1*$2, $1}' | awk '{print $1*2"x"$2*2}'),"
+	#
+	### [swscaler @ 0x81520d000] Warning: data is not aligned! This can lead to a speed loss
+	### laut Googel müssen die Pixel durch 16 teilbar sein, beseitigt aber leider das Problem hier nicht
+	#TEILER="2"
+	#TEILER="8"
+	TEILER="16"
+	#TEILER="32"
+	TEIL_HOEHE="$(echo "${IN_BREIT} ${IN_HOCH} ${DAR_KOMMA} ${TEILER}" | awk '{h=sqrt($1*$2/$3); printf "%.0f\n", h/$4}')"
+	QUADR_SCALE="scale=$(echo "${TEIL_HOEHE} ${DAR_KOMMA}" | awk '{printf "%.0f %.0f\n", $1*$2, $1}' | awk -v teiler="${TEILER}" '{print $1*teiler"x"$2*teiler}'),"
 
 	QUADR_BREITE="$(echo "${QUADR_SCALE}" | sed 's/x/ /;s/^[^0-9][^0-9]*//;s/[^0-9][^0-9]*$//' | awk '{print $1}')"
 	QUADR_HOCH="$(echo "${QUADR_SCALE}" | sed 's/x/ /;s/^[^0-9][^0-9]*//;s/[^0-9][^0-9]*$//' | awk '{print $2}')"
@@ -772,7 +838,11 @@ fi
 # SCHWARZ="$(echo "${HOEHE} ${BREITE} ${QUADR_BREITE} ${QUADR_HOCH}" | awk '{sw="oben"; if (($1/$2) < ($3/$4)) sw="oben"; print sw}')"
 # SCHWARZ="$(echo "${HOEHE} ${BREITE} ${QUADR_BREITE} ${QUADR_HOCH}" | awk '{sw="oben"; if (($1/$2) > ($3/$4)) sw="links"; print sw}')"
 #
-PAD="pad='max(iw\\,ih*(${HOEHE}/${BREITE})):ow/(${HOEHE}/${BREITE}):(ow-iw)/2:(oh-ih)/2',"
+if [ "${ORIGINAL_PIXEL}" = Ja ] ; then
+	unset PAD
+else
+	PAD="pad='max(iw\\,ih*(${HOEHE}/${BREITE})):ow/(${HOEHE}/${BREITE}):(ow-iw)/2:(oh-ih)/2',"
+fi
 
 VIDEOOPTION="-crf ${AVC_CRF} -vf ${ZEILENSPRUNG}${CROP}${QUADR_SCALE}${PAD}${SOLL_SCALE}setsar='1/1'"
 
@@ -834,8 +904,9 @@ fi
 
 #==============================================================================#
 
-rm -f ${MP4VERZ}/${MP4NAME}.txt
-echo "${0} $@" > ${MP4VERZ}/${MP4NAME}.txt
+#rm -f ${MP4VERZ}/${MP4NAME}.txt
+echo "${0} ${Film2MP4_OPTIONEN}" > ${MP4VERZ}/${MP4NAME}.txt
+
 
 if [ -z "${SCHNITTZEITEN}" ] ; then
 	echo

@@ -1,5 +1,5 @@
 # Film2MP4
-Filme in ein HTML5-kompatibles MP4-Format umrechnen
+Filme in ein HTML5-kompatibles MP4-Format umrechnen, die Video-Daten werden hier BluRay-kompatibel erzeugt.
 
 Video- und Audio-Spur in ein HTML5-kompatibles Format transkodieren
 

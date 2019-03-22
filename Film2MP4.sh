@@ -26,7 +26,7 @@ BILDQUALIT="auto"
 TONQUALIT="auto"
 
 #set -x
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+PATH="$HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 STARTZEITPUNKT="$(date +'%s')"
 
@@ -228,7 +228,18 @@ while [ "${#}" -ne "0" ]; do
                         shift
                         ;;
                 -stereo)
-                        STEREO="-ac 2"		# Stereo-Ausgabe erzwingen
+                        # Stereo-Ausgabe erzwingen 
+                        # 5.1 mischen auf algorithmus von Dave_750 
+                        # hier werden die tiefbass spur (LFE) mit abgemischt
+                        # das trifft bei -ac 2 nicht zu (ATSC standards)
+                        # -ac 2 als filter:
+                        # -af "pan=stereo|FL < 1.0*FL + 0.707*FC + 0.707*BL|FR < 1.0*FR + 0.707*FC + 0.707*BR"
+                        # Quelle: https://superuser.com/questions/852400/properly-downmix-5-1-to-stereo-using-ffmpeg/1410620#1410620
+                        STEREO="-filter_complex pan='stereo|FL=0.5*FC+0.707*FL+0.707*BL+0.5*LFE|FR=0.5*FC+0.707*FR+0.707*BR+0.5*LFE',volume='1.562500'"
+                        # NighMode 
+                        # The Nightmode Dialogue formula, created by Robert Collier on the Doom9 forum and sourced by Shane Harrelson in his answer, 
+                        # results in a far better downmix than the ac -2 switch - instead of overly quiet dialogues, it brings them back to levels that are much closer to the source.
+                        #STEREO="-filter_complex pan='stereo|FL=FC+0.30*FL+0.30*BL|FR=FC+0.30*FR+0.30*BR'"
                         shift
                         ;;
                 -schnitt)
@@ -516,8 +527,8 @@ elif [ "${IN_BIT_EINH}" = "Mb/s" ] ; then
 	IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1 * 1024}')"
 else
 	unset IN_BIT_RATE
-	BILDQUALIT="5"
-	TONQUALIT="5"
+	BILDQUALIT="${BILDQUALIT:-auto}"
+	TONQUALIT="${TONQUALIT:-auto}"
 fi
 unset IN_BITRATE
 unset IN_BIT_EINH
@@ -1054,6 +1065,13 @@ if [ "x${AUDIOCODEC}" = "x" ] ; then
 	fi
 fi
 
+# libfdk_aac afterburner aktivieren für bessere audio qualität
+# https://wiki.hydrogenaud.io/index.php?title=Fraunhofer_FDK_AAC#Afterburner
+# Afterburner is "a type of analysis by synthesis algorithm which increases the audio quality but also the required processing power."
+# Fraunhofer recommends to always activate this feature.
+if [ "x${AUDIOCODEC}" = "xlibfdk_aac" ] ; then
+        AUDIOCODEC="${AUDIOCODEC} -afterburner 1"
+fi
 
 ### 2018-07-15: [libfdk_aac @ 0x813af3900] Note, the VBR setting is unsupported and only works with some parameter combinations
 ### https://trac.ffmpeg.org/wiki/Encode/HighQualityAudio
@@ -1442,6 +1460,11 @@ BLURAY_PARAMETER ${LEVEL} ${QUADR_MAKROBLOECKE} ${MaxFS}
 #VIDEO_OPTION="-profile:v ${PROFILE} -preset veryslow -tune film -x264opts ref=4:b-pyramid=strict:bluray-compat=1:weightp=0:vbv-maxrate=${MaxBR}:vbv-bufsize=${MaxCPB}:level=${LEVEL}:slices=4:b-adapt=2:direct=auto:colorprim=${FARBCOD}:transfer=${FARBCOD}:colormatrix=${FARBCOD}:keyint=${KEYINT}:aud:subme=9"
 
 VIDEO_OPTION="-profile:v ${PROFILE} -preset veryslow -tune film -x264opts ref=4:b-pyramid=strict:bluray-compat=1:weightp=0:vbv-maxrate=${MaxBR}:vbv-bufsize=${MaxCPB}:level=${LEVEL}:slices=4:b-adapt=2:direct=auto:colorprim=${FARBCOD}:transfer=${FARBCOD}:colormatrix=${FARBCOD}:keyint=${KEYINT}:aud:subme=9:nal-hrd=vbr"
+
+# Stream funktion bei mp4 für SmartTV etc aktivieren
+if [ "x${ENDUNG}" = "xmp4" ]; then
+	VIDEO_OPTION="${VIDEO_OPTION} -movflags faststart"
+fi
 
 VIDEO_QUALITAET_0="${VIDEO_OPTION} -crf 30"		# von "0" (verlustfrei) bis "51"
 VIDEO_QUALITAET_1="${VIDEO_OPTION} -crf 28"		# von "0" (verlustfrei) bis "51"

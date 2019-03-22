@@ -19,7 +19,8 @@
 
 
 #VERSION="v2017102900"
-VERSION="v2018090100"
+#VERSION="v2018090100"
+VERSION="v2019032200"
 
 
 BILDQUALIT="auto"
@@ -516,8 +517,6 @@ elif [ "${IN_BIT_EINH}" = "Mb/s" ] ; then
 	IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1 * 1024}')"
 else
 	unset IN_BIT_RATE
-	BILDQUALIT="5"
-	TONQUALIT="5"
 fi
 unset IN_BITRATE
 unset IN_BIT_EINH

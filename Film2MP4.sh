@@ -19,7 +19,8 @@
 
 
 #VERSION="v2017102900"
-VERSION="v2018090100"
+#VERSION="v2018090100"
+VERSION="v2019032200"
 
 
 BILDQUALIT="auto"
@@ -1020,7 +1021,8 @@ FORMAT="mp4"
 # AAC
 #
 
-VERSION="v2018082900"
+#VERSION="v2018082900"
+VERSION="v2019032200"
 
 #------------------------------------------------------------------------------#
 # https://trac.ffmpeg.org/wiki/Encode/AAC
@@ -1153,7 +1155,8 @@ fi
 #==============================================================================#
 ### Video
 
-VERSION="v2018082900"
+#VERSION="v2018082900"
+VERSION="v2019032200"
 
 #------------------------------------------------------------------------------#
 ### Kompatibilität zur Blu-ray
@@ -1639,7 +1642,7 @@ if [ "${STREAMAUDIO}" -gt 0 ] ; then
 		AUDIO_VERARBEITUNG_01="-map 0:a:${TSNAME} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET}"
 	else
 		# wurde die Ausgabe bereits durch die Codec-Optionen auf Stereo gesetzt?
-		BEREITS_AC2="$(echo "${AUDIOCODEC} ${AUDIOQUALITAET}" | fgrep "ac 2")"
+		BEREITS_AC2="$(echo "${AUDIOCODEC} ${AUDIOQUALITAET}" | grep -E 'ac 2|stereo')"
 		if [ "x${BEREITS_AC2}" = x ] ; then
 			AUDIO_VERARBEITUNG_01="-map 0:a:${TSNAME} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET} ${STEREO}"
 		else

@@ -26,7 +26,7 @@ BILDQUALIT="auto"
 TONQUALIT="auto"
 
 #set -x
-PATH="$HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 STARTZEITPUNKT="$(date +'%s')"
 
@@ -228,7 +228,8 @@ while [ "${#}" -ne "0" ]; do
                         shift
                         ;;
                 -stereo)
-                        # Stereo-Ausgabe erzwingen 
+                        #STEREO="-ac 2"		# Stereo-Ausgabe erzwingen
+			# Stereo-Ausgabe erzwingen 
                         # 5.1 mischen auf algorithmus von Dave_750 
                         # hier werden die tiefbass spur (LFE) mit abgemischt
                         # das trifft bei -ac 2 nicht zu (ATSC standards)
@@ -527,8 +528,6 @@ elif [ "${IN_BIT_EINH}" = "Mb/s" ] ; then
 	IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1 * 1024}')"
 else
 	unset IN_BIT_RATE
-	BILDQUALIT="${BILDQUALIT:-auto}"
-	TONQUALIT="${TONQUALIT:-auto}"
 fi
 unset IN_BITRATE
 unset IN_BIT_EINH

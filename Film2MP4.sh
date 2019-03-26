@@ -20,7 +20,7 @@
 
 #VERSION="v2017102900"
 #VERSION="v2018090100"
-VERSION="v2019032200"
+VERSION="v2019032600"
 
 
 BILDQUALIT="auto"
@@ -523,13 +523,17 @@ IN_FPS_RUND="$(echo "${IN_FPS}" | awk '{printf "%.0f\n", $1}')"			# für Verglei
 IN_BITRATE="$(echo "${MEDIAINFO}" | sed -ne '/^Video$/,/^$/ p' | egrep '^Bit rate' | awk -F':' '{print $2}' | sed 's/[ ]*//g;s/[a-zA-Z/][a-zA-Z/]*$/ &/' | tail -n1)"
 IN_BIT_EINH="$(echo "${IN_BITRATE}" | awk '{print $2}')"
 
-if [ "${IN_BIT_EINH}" = "kb/s" ] ; then
-	IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1}')"
-elif [ "${IN_BIT_EINH}" = "Mb/s" ] ; then
-	IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1 * 1024}')"
-else
-	unset IN_BIT_RATE
-fi
+case "${IN_BIT_EINH}" in
+        [Kk]b[p/]s)
+                        IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1}')"
+                        ;;
+        [Mm]b[p/]s)
+                        IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1 * 1024}')"
+                        ;;
+        *)
+                        unset IN_BIT_RATE
+                        ;;
+esac
 unset IN_BITRATE
 unset IN_BIT_EINH
 

@@ -20,7 +20,9 @@
 
 #VERSION="v2017102900"
 #VERSION="v2018090100"
-VERSION="v2019032600"
+#VERSION="v2019032600"
+#VERSION="v2019051700"
+VERSION="v2019082800"
 
 
 BILDQUALIT="auto"
@@ -253,7 +255,10 @@ while [ "${#}" -ne "0" ]; do
                         shift
                         ;;
                 -u)
-                        UNTERTITEL="-map 0:s:${2} -scodec copy"		# "0" für die erste Untertitelspur
+                        # "0" für die erste Untertitelspur
+                        # "1" für die zweite Untertitelspur
+                        # "0,1" für die erste und die zweite Untertitelspur
+                        UNTERTITEL="${2}"
                         shift
                         ;;
                 -g)
@@ -273,8 +278,12 @@ while [ "${#}" -ne "0" ]; do
         # ein Beispiel mit minimaler Anzahl an Parametern
         ${0} -q Film.avi -z Film.mp4
 
-        # ein Beispiel, bei dem auch die erste Untertitelspur (Zählweise beginnt mit '0'!) mit übernommen wird
+        # ein Beispiel, bei dem die erste Untertitelspur (Zählweise beginnt mit '0'!) übernommen wird
         ${0} -q Film.avi -u 0 -z Film.mp4
+        # ein Beispiel, bei dem die zweite Untertitelspur übernommen wird
+        ${0} -q Film.avi -u 1 -z Film.mp4
+        # ein Beispiel, bei dem die erste und die zweite Untertitelspur übernommen werden
+        ${0} -q Film.avi -u 0,1 -z Film.mp4
 
         # Es duerfen in den Dateinamen keine Leerzeichen, Sonderzeichen
         # oder Klammern enthalten sein!
@@ -423,15 +432,16 @@ REPARATUR_PARAMETER="-fflags +genpts"
 #==============================================================================#
 ### Untertitel
 
-unset U_TITEL_MKV
-if [ -n "${UNTERTITEL}" ] ; then
-	echo "${UNTERTITEL}" | egrep '0:s:[0-9]' >/dev/null || export U_TITEL=Fehler
-	U_TITEL_MKV="-map 0:s:0 -scodec copy"
-	if [ "${U_TITEL}" = "Fehler" ] ; then
-		echo "Für die Untertitelspur muss eine Zahl angegeben werden. Abbruch!"
-		echo "z.B.: ${0} -q Film.avi -u 0 -z Film.mp4"
-		exit 16
-	fi
+# -map 0:s:0 -c:s copy -map 0:s:1 -c:s copy		# "0" für die erste Untertitelspur
+# UNTERTITEL="-map 0:s:${i} -scodec copy"		# alt
+# UNTERTITEL="-map 0:s:${i} -c:s copy"			# neu
+
+unset U_TITEL_FF
+if [ "x${UNTERTITEL}" != "x" ] ; then
+	U_TITEL_FF="$(for i in $(echo "${UNTERTITEL}" | sed 's/,/ /g')
+	do
+		echo -n " -map 0:s:${i} -c:s copy"
+	done)"
 fi
 
 #==============================================================================#
@@ -480,7 +490,8 @@ FFMPEG_FORMATS="$(ffmpeg -formats 2>/dev/null | awk '/^[ \t]*[ ][DE]+[ ]/{print 
 #echo "--------------------------------------------------------------------------------"
 #probe "${FILMDATEI}" 2>&1 | fgrep Video:
 #echo "--------------------------------------------------------------------------------"
-FFPROBE="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | sed 's/.* Video:/Video:/' | tr -s '[\[,\]]' '\n' | egrep '[0-9]x[0-9]|SAR |DAR | fps' | grep -Fv 'Stream #' | grep -Fv 'Video:' | tr -s '\n' ' ')"
+#FFPROBE="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | sed 's/.* Video:/Video:/' | tr -s '[\[,\]]' '\n' | egrep '[0-9]x[0-9]|SAR |DAR | fps' | grep -Fv 'Stream #' | grep -Fv 'Video:' | tr -s '\n' ' ')"
+FFPROBE="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | sed 's/.* Video:/Video:/' | tr -s '[\[,\]]' '\n' | egrep '[0-9]x[0-9]|SAR |DAR | fps' | grep -Fv 'Stream #' | grep -Fv 'Video:' | grep -Fv ')' | tr -s '\n' ' ')"
 # tbn (FPS vom Container)= the time base in AVStream that has come from the container
 # tbc (FPS vom Codec) = the time base in AVCodecContext for the codec used for a particular stream
 # tbr (FPS vom Video-Stream geraten) = tbr is guessed from the video stream and is the value users want to see when they look for the video frame rate
@@ -868,6 +879,11 @@ ZIEL_BASIS_NAME="$(echo "${ZIELDATEI}" | awk '{print tolower($0)}')"
 ZIELNAME="$(echo "${ZIELDATEI}" | rev | sed 's/[ ][ ]*/_/g;s/.*[.]//' | rev)"
 ENDUNG="$(echo "${ZIEL_BASIS_NAME}" | rev | sed 's/[a-zA-Z0-9\_\-\+/][a-zA-Z0-9\_\-\+/]*[.]/&"/;s/[.]".*//' | rev)"
 
+if [ "${ENDUNG}" != "mp4" ] ; then 
+	echo "Fehler: Die Endung der Zieldatei darf nur 'mp4' sein."
+	exit 232
+fi
+
 if [ "${QUELL_BASIS_NAME}" = "${ZIEL_BASIS_NAME}" ] ; then
 	ZIELNAME="${ZIELNAME}_Nr2"
 fi
@@ -1039,6 +1055,11 @@ VERSION="v2019032200"
 #   Opus eingebettet in das Matroska-Containerformat nativ.
 
 ### libfdk_aac
+###
+### -b:a => funktioniert mit allen Encodern gut
+### -vbr => funktioniert mit libfdk_aac nicht uneingeschränkt
+### -q:a => funktioniert nur mit "aac" (libfdk_aac setzt es mit vbr gleich)
+###
 #
 # laut Debian ist libfdk_aac "non-free"-Licenc
 # laut FSF, Fedora, RedHat ist libfdk_aac "free"-Licenc
@@ -1049,6 +1070,26 @@ VERSION="v2019032200"
 # 
 # FDK AAC kann im Modus "VBR" keine beliebige Kombination von Tonkanäle, Bit-Rate und Saple-Rate verarbeiten!
 # Will man "VBR" verwenden, dann muss man explizit alle drei Parameter in erlaubter Größe angeben.
+
+### 2018-07-15: [libfdk_aac @ 0x813af3900] Note, the VBR setting is unsupported and only works with some parameter combinations
+### https://trac.ffmpeg.org/wiki/Encode/HighQualityAudio
+### http://wiki.hydrogenaud.io/index.php?title=Fraunhofer_FDK_AAC#Audio_Object_Types
+### http://wiki.hydrogenaud.io/index.php?title=Fraunhofer_FDK_AAC#Usage.2FExamples
+#AUDIO_OPTION="-profile:a aac_he"
+#AUDIO_OPTION="-profile:a aac_he_v2"
+#AUDIO_QUALITAET_0="-vbr 1"                                      # 1 bis 5, 4 empfohlen / Constant (CBR): ~ 184 kb/s
+
+#AUDIO_QUALITAET_0="-vbr 1"
+#AUDIO_QUALITAET_1="-vbr 1"
+#AUDIO_QUALITAET_2="-vbr 2"
+#AUDIO_QUALITAET_3="-vbr 2"
+#AUDIO_QUALITAET_4="-vbr 3"
+#AUDIO_QUALITAET_5="-vbr 3"
+#AUDIO_QUALITAET_6="-vbr 4"
+#AUDIO_QUALITAET_7="-vbr 4"
+#AUDIO_QUALITAET_8="-vbr 5"
+#AUDIO_QUALITAET_9="-vbr 5"
+
 
 #--------------------------------------------------------------
 # FFmpeg-Option für "aac" (nativ/intern)
@@ -1078,13 +1119,6 @@ if [ "x${AUDIOCODEC}" = "xlibfdk_aac" ] ; then
         AUDIOCODEC="${AUDIOCODEC} -afterburner 1"
 fi
 
-### 2018-07-15: [libfdk_aac @ 0x813af3900] Note, the VBR setting is unsupported and only works with some parameter combinations
-### https://trac.ffmpeg.org/wiki/Encode/HighQualityAudio
-### http://wiki.hydrogenaud.io/index.php?title=Fraunhofer_FDK_AAC#Audio_Object_Types
-### http://wiki.hydrogenaud.io/index.php?title=Fraunhofer_FDK_AAC#Usage.2FExamples
-#AUDIO_OPTION="-profile:a aac_he"
-#AUDIO_OPTION="-profile:a aac_he_v2"
-#AUDIO_QUALITAET_0="-vbr 1"                                      # 1 bis 5, 4 empfohlen / Constant (CBR): ~ 184 kb/s
 
 # https://slhck.info/video/2017/02/24/vbr-settings.html
 # undokumentiert (0.1-?) -> "-q:a 0.12" ~ 128k
@@ -1715,10 +1749,10 @@ if [ -z "${SCHNITTZEITEN}" ] ; then
 	### hier der Film transkodiert                                       ###
 	###------------------------------------------------------------------###
 	echo
-	echo "1: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${UNTERTITEL} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	echo "1: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	echo
 #>
-	         ${PROGRAMM} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${UNTERTITEL} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} 2>&1
+	         ${PROGRAMM} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} 2>&1
 
 else
 
@@ -1746,14 +1780,14 @@ else
 		### hier werden die Teile zwischen der Werbung transkodiert  ###
 		###----------------------------------------------------------###
 		echo
-		echo "2: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${UNTERTITEL} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+		echo "2: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 		echo
 #>
-		         ${PROGRAMM} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${UNTERTITEL} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} 2>&1
+		         ${PROGRAMM} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} 2>&1
 
 		### das ist nicht nötig, wenn das End-Container-Format bereits MKV ist
 		if [ "${ENDUNG}" != "mkv" ] ; then
-			ffmpeg -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} -c:v copy -c:a copy ${U_TITEL_MKV} -f matroska -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.mkv && rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}
+			ffmpeg -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} -c:v copy -c:a copy ${U_TITEL_FF} -f matroska -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.mkv && rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}
 		fi
 
 		echo "---------------------------------------------------------"
@@ -1765,9 +1799,9 @@ else
 	mkvmerge -o ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${FILM_TEILE}
 
 	# den vertigen Film aus dem MKV-Format in das MP$-Format umwandeln
-	echo "4: ${PROGRAMM} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_MKV} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}"
+	echo "4: ${PROGRAMM} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}"
 #>
-	         ${PROGRAMM} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_MKV} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
+	         ${PROGRAMM} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
 
 	#ls -lh ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.mkv ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv
 	#echo "rm -f ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.mkv ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv"
@@ -1777,7 +1811,7 @@ fi
 #------------------------------------------------------------------------------#
 
 echo "
-5: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TSNAME} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET} ${STEREO} ${UNTERTITEL} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
+5: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TSNAME} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET} ${STEREO} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
 "
 #------------------------------------------------------------------------------#
 

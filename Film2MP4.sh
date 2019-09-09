@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 
 #------------------------------------------------------------------------------#
+# Aufgabe:
+# Skript so umbauen, das mkvmerge und mediainfo nicht mehr benötigt werden.
+#------------------------------------------------------------------------------#
 #
 # Dieses Skript verändert NICHT die Bildwiederholrate!
 #
-# Das Ergebnis besteht aus folgendem Format:
+# Das Ergebnis besteht immer aus folgendem Format:
 #  - MP4:    mp4  + H.264/AVC  + AAC
 #
 # https://de.wikipedia.org/wiki/Containerformat
@@ -22,7 +25,9 @@
 #VERSION="v2018090100"
 #VERSION="v2019032600"
 #VERSION="v2019051700"
-VERSION="v2019082800"
+#VERSION="v2019082800"
+#VERSION="v2019090800"
+VERSION="v2019090900"
 
 
 BILDQUALIT="auto"
@@ -227,7 +232,11 @@ while [ "${#}" -ne "0" ]; do
                         shift
                         ;;
                 -ton)
-                        TONSPUR="${2}"		# Tonspur (1, 2, 3, 4)
+                        # Wirddiese Option nicht verwendet, dann werden ALLE Tonspuren eingebettet
+                        # "0" für die erste Tonspur
+                        # "1" für die zweite Tonspur
+                        # "0,1" für die erste und die zweite Tonspur
+                        TONSPUR="${2}"		# -ton 0,1,2,3,4
                         shift
                         ;;
                 -stereo)
@@ -255,10 +264,12 @@ while [ "${#}" -ne "0" ]; do
                         shift
                         ;;
                 -u)
+                        # Wirddiese Option nicht verwendet, dann werden ALLE Untertitelspuren eingebettet
+                        # "-1" für keinen Untertitel
                         # "0" für die erste Untertitelspur
                         # "1" für die zweite Untertitelspur
                         # "0,1" für die erste und die zweite Untertitelspur
-                        UNTERTITEL="${2}"
+                        UNTERTITEL="${2}"	# -u 0,1,2,3,4
                         shift
                         ;;
                 -g)
@@ -387,16 +398,6 @@ if [ ! -r "${FILMDATEI}" ] ; then
         exit 14
 fi
 
-if [ -z "${TONSPUR}" ] ; then
-        TONSPUR=0	# die erste Tonspur ist "0"
-else
-	if [ "${TONSPUR}" -gt 0 ] ; then
-		TSNAME="$(echo "${TONSPUR}" | awk '{print $1 - 1}')"
-	else
-		TSNAME="${TONSPUR}"
-	fi
-fi
-
 #------------------------------------------------------------------------------#
 # damit die Zieldatei mit Verzeichnis angegeben werden kann
 
@@ -407,42 +408,22 @@ ZIELDATEI="$(basename ${ZIELPFAD})"
 #------------------------------------------------------------------------------#
 # damit keine Leerzeichen im Dateinamen enthalten sind
 
-if [ -z "${TSNAME}" ] ; then
-        ZIELDATEI="$(echo "${ZIELDATEI}" | rev | sed 's/[.]/ /' | rev | awk '{print $1"."$2}')"
-else
-	# damit man erkennt welche Tonspur aus dem Original verwendet wurde
-        ZIELDATEI="$(echo "${ZIELDATEI} ${TONSPUR}" | rev | sed 's/[.]/ /' | rev | awk '{print $1"_-_Tonspur_"$3"."$2}')"
-fi
+ZIELDATEI="$(echo "${ZIELDATEI}" | rev | sed 's/[.]/ /' | rev | awk '{print $1"."$2}')"
 
 #==============================================================================#
 ### Programm
 
 PROGRAMM="$(which ffmpeg)"
-if [ -z "${PROGRAMM}" ] ; then
+if [ "x${PROGRAMM}" == "x" ] ; then
 	PROGRAMM="$(which avconv)"
 fi
 
-if [ -z "${PROGRAMM}" ] ; then
+if [ "x${PROGRAMM}" == "x" ] ; then
 	echo "Weder avconv noch ffmpeg konnten gefunden werden. Abbruch!"
 	exit 15
 fi
 
 REPARATUR_PARAMETER="-fflags +genpts"
-
-#==============================================================================#
-### Untertitel
-
-# -map 0:s:0 -c:s copy -map 0:s:1 -c:s copy		# "0" für die erste Untertitelspur
-# UNTERTITEL="-map 0:s:${i} -scodec copy"		# alt
-# UNTERTITEL="-map 0:s:${i} -c:s copy"			# neu
-
-unset U_TITEL_FF
-if [ "x${UNTERTITEL}" != "x" ] ; then
-	U_TITEL_FF="$(for i in $(echo "${UNTERTITEL}" | sed 's/,/ /g')
-	do
-		echo -n " -map 0:s:${i} -c:s copy"
-	done)"
-fi
 
 #==============================================================================#
 #==============================================================================#
@@ -471,9 +452,16 @@ fi
 #  720x576 SAR 64:45 DAR 16:9
 #  1920x816 SAR 1:1 DAR 40:17
 #------------------------------------------------------------------------------#
-### hier wird ermittelt, wieviele Audio-Kanäle max. um Film enthalten sind
+### Meta-Daten auslesen
 
-AUDIO_KANAELE="$(ffprobe -show_data -show_streams "${FILMDATEI}" 2>/dev/null | sed -e '1,/^codec_type=audio/ d' | awk -F'=' '/^channels=/{print $2}' | sort -nr | head -n1)"	# max. Anzahl der vorhandenen Audio-Kanäle
+META_DATEN="$(ffprobe -show_data -show_streams "${FILMDATEI}" 2>/dev/null)"
+
+echo "${META_DATEN}" | grep -E '^codec_(name|long_name|type)=' | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
+#------------------------------------------------------------------------------#
+### hier wird ermittelt, wieviele Audio-Kanäle max. im Film enthalten sind
+
+AUDIO_KANAELE="$(echo "${META_DATEN}" | sed -e '1,/^codec_type=audio/ d' | awk -F'=' '/^channels=/{print $2}' | sort -nr | head -n1)"	# max. Anzahl der vorhandenen Audio-Kanäle
 if [ "x${STEREO}" != "x" ] ; then
 	AUDIO_KANAELE="2"
 fi
@@ -498,7 +486,7 @@ FFPROBE="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | sed 's/.* Video:/Video:/
 echo "FFPROBE='${FFPROBE}'"
 #------------------------------------------------------------------------------#
 ### alternative Methode zur Ermittlung der FPS
-R_FPS="$(ffprobe -show_data -show_streams "${FILMDATEI}" 2>/dev/null | egrep '^codec_type=|^r_frame_rate=' | egrep -A1 '^codec_type=video' | awk -F'=' '/^r_frame_rate=/{print $2}' | sed 's|/| |')"
+R_FPS="$(echo "${META_DATEN}" | egrep '^codec_type=|^r_frame_rate=' | egrep -A1 '^codec_type=video' | awk -F'=' '/^r_frame_rate=/{print $2}' | sed 's|/| |')"
 A_FPS="$(echo "${R_FPS}" | wc -w)"
 if [ "${A_FPS}" -gt 1 ] ; then
 	R_FPS="$(echo "${R_FPS}" | awk '{print $1 / $2}')"
@@ -1669,24 +1657,65 @@ VIDEOQUALITAET=${VIDEOQUALITAET}
 #exit 26
 
 #==============================================================================#
+### Untertitel
+
+# -map 0:s:0 -c:s copy -map 0:s:1 -c:s copy		# "0" für die erste Untertitelspur
+# UNTERTITEL="-map 0:s:${i} -scodec copy"		# alt
+# UNTERTITEL="-map 0:s:${i} -c:s copy"			# neu
+
+if [ "${UNTERTITEL}" == "-1" ] ; then
+	U_TITEL_FF=""
+else
+    if [ "x${UNTERTITEL}" == "x" ] ; then
+	UT_LISTE="$(echo "${META_DATEN}" | fgrep -i codec_type=subtitle | nl | awk '{print $1 - 1}' | tr -s '\n' ' ')"
+    else
+	UT_LISTE="$(echo "${UNTERTITEL}" | sed 's/,/ /g')"
+    fi
+
+    U_TITEL_FF="$(for DER_UT in ${UT_LISTE}
+    do
+	echo -n " -map 0:s:${DER_UT} -c:s copy"
+    done)"
+fi
+
+echo "
+UNTERTITEL=${UNTERTITEL}
+UT_LISTE=${UT_LISTE}
+U_TITEL_FF=${U_TITEL_FF}
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+#exit 16
+
+#==============================================================================#
 # Audio
 
-STREAM_AUDIO="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep ' Stream ' | fgrep Audio:)"
-STREAMAUDIO="$(echo "${STREAM_AUDIO}" | wc -w | awk '{print $1}')"
+if [ "x${TONSPUR}" == "x" ] ; then
+        TSNAME="$(echo "${META_DATEN}" | fgrep -i codec_type=audio | nl | awk '{print $1 - 1}' | tr -s '\n' ',' | sed 's/^,//;s/,$//')"
+else
+	TSNAME="${TONSPUR}"
+fi
 
-if [ "${STREAMAUDIO}" -gt 0 ] ; then
+TS_LISTE="$(echo "${TSNAME}" | sed 's/,/ /g')"
+TS_ANZAHL="$(echo "${TSNAME}" | sed 's/,/ /g' | wc -w | awk '{print $1}')"
+
+if [ "${TS_ANZAHL}" -gt 0 ] ; then
 	# soll Stereo-Ausgabe erzwungen werden?
 	if [ "x${STEREO}" = x ] ; then
-		AUDIO_VERARBEITUNG_01="-map 0:a:${TSNAME} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET}"
+		_ST=""
 	else
 		# wurde die Ausgabe bereits durch die Codec-Optionen auf Stereo gesetzt?
 		BEREITS_AC2="$(echo "${AUDIOCODEC} ${AUDIOQUALITAET}" | grep -E 'ac 2|stereo')"
 		if [ "x${BEREITS_AC2}" = x ] ; then
-			AUDIO_VERARBEITUNG_01="-map 0:a:${TSNAME} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET} ${STEREO}"
+			_ST="${STEREO}"
 		else
-			AUDIO_VERARBEITUNG_01="-map 0:a:${TSNAME} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET}"
+			_ST=""
 		fi
 	fi
+
+	AUDIO_VERARBEITUNG_01="$(for DIE_TS in ${TS_LISTE}
+	do
+		echo -n " -map 0:a:${DIE_TS} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET} ${_ST}"
+	done)"
+
 	AUDIO_VERARBEITUNG_02="-c:a copy"
 else
 	AUDIO_VERARBEITUNG_01="-an"
@@ -1730,8 +1759,8 @@ START_ZIEL_FORMAT="-f ${FORMAT}"
 #==============================================================================#
 
 echo "
-STREAM_AUDIO=${STREAM_AUDIO}
-STREAMAUDIO=${STREAMAUDIO}
+TS_LISTE=${TS_LISTE}
+TS_ANZAHL=${TS_ANZAHL}
 
 AUDIO_VERARBEITUNG_01=${AUDIO_VERARBEITUNG_01}
 AUDIO_VERARBEITUNG_02=${AUDIO_VERARBEITUNG_02}
@@ -1811,7 +1840,7 @@ fi
 #------------------------------------------------------------------------------#
 
 echo "
-5: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} -map 0:a:${TSNAME} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET} ${STEREO} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
+5: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
 "
 #------------------------------------------------------------------------------#
 

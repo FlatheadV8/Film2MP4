@@ -2,7 +2,7 @@
 
 #------------------------------------------------------------------------------#
 # Aufgabe:
-# Skript so umbauen, das mkvmerge und mediainfo nicht mehr benötigt werden.
+# Skript so umbauen das mkvmerge nicht mehr benötigt wird.
 #------------------------------------------------------------------------------#
 #
 # Dieses Skript verändert NICHT die Bildwiederholrate!
@@ -15,7 +15,6 @@
 # Es werden folgende Programme von diesem Skript verwendet:
 #  - ffmpeg
 #  - ffprobe
-#  - mediainfo
 #  - mkvmerge (aus dem Paket mkvtoolnix)
 #
 #------------------------------------------------------------------------------#
@@ -27,7 +26,8 @@
 #VERSION="v2019051700"
 #VERSION="v2019082800"
 #VERSION="v2019090800"
-VERSION="v2019090900"
+#VERSION="v2019090900"
+VERSION="v2019091000"
 
 
 BILDQUALIT="auto"
@@ -384,6 +384,21 @@ done
 
 
 #==============================================================================#
+### Programm
+
+PROGRAMM="$(which ffmpeg)"
+if [ "x${PROGRAMM}" == "x" ] ; then
+	PROGRAMM="$(which avconv)"
+fi
+
+if [ "x${PROGRAMM}" == "x" ] ; then
+	echo "Weder avconv noch ffmpeg konnten gefunden werden. Abbruch!"
+	exit 15
+fi
+
+REPARATUR_PARAMETER="-fflags +genpts"
+
+#==============================================================================#
 ### Trivialitäts-Check
 
 if [ "${STOP}" = "Ja" ] ; then
@@ -411,23 +426,49 @@ ZIELDATEI="$(basename ${ZIELPFAD})"
 ZIELDATEI="$(echo "${ZIELDATEI}" | rev | sed 's/[.]/ /' | rev | awk '{print $1"."$2}')"
 
 #==============================================================================#
-### Programm
+# Das Video-Format wird nach der Dateiendung ermittelt
+# deshalb muss ermittelt werden, welche Dateiendung der Name der Ziel-Datei hat
+#
+# Wenn der Name der Quell-Datei und der Name der Ziel-Datei gleich sind,
+# dann wird dem Namen der Ziel-Datei ein "Nr2" vor der Endung angehängt
+#
 
-PROGRAMM="$(which ffmpeg)"
-if [ "x${PROGRAMM}" == "x" ] ; then
-	PROGRAMM="$(which avconv)"
+QUELL_BASIS_NAME="$(echo "${QUELL_DATEI}" | awk '{print tolower($0)}')"
+ZIEL_BASIS_NAME="$(echo "${ZIELDATEI}" | awk '{print tolower($0)}')"
+
+ZIELNAME="$(echo "${ZIELDATEI}" | rev | sed 's/[ ][ ]*/_/g;s/.*[.]//' | rev)"
+ENDUNG="$(echo "${ZIEL_BASIS_NAME}" | rev | sed 's/[a-zA-Z0-9\_\-\+/][a-zA-Z0-9\_\-\+/]*[.]/&"/;s/[.]".*//' | rev)"
+
+if [ "${ENDUNG}" != "mp4" ] ; then 
+	echo "Fehler: Die Endung der Zieldatei darf nur 'mp4' sein."
+	exit 232
 fi
 
-if [ "x${PROGRAMM}" == "x" ] ; then
-	echo "Weder avconv noch ffmpeg konnten gefunden werden. Abbruch!"
-	exit 15
+if [ "${QUELL_BASIS_NAME}" = "${ZIEL_BASIS_NAME}" ] ; then
+	ZIELNAME="${ZIELNAME}_Nr2"
 fi
 
-REPARATUR_PARAMETER="-fflags +genpts"
+#------------------------------------------------------------------------------#
+### ab hier kann in die Log-Datei geschrieben werden
+
+#rm -f ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+echo "# $(date +'%F %T')
+${0} ${Film2Standardformat_OPTIONEN}" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
+echo "
+${FORMAT_BESCHREIBUNG}
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
+#------------------------------------------------------------------------------#
+
+###====
 
 #==============================================================================#
 #==============================================================================#
 ### Video
+#
+# IN-Daten (META-Daten) aus der Filmdatei lesen
+#
 
 #------------------------------------------------------------------------------#
 ### FFmpeg verwendet drei verschiedene Zeitangaben:
@@ -437,9 +478,6 @@ REPARATUR_PARAMETER="-fflags +genpts"
 # tbc = the time base in AVCodecContext for the codec used for a particular stream
 # tbr = tbr is guessed from the video stream and is the value users want to see when they look for the video frame rate
 #------------------------------------------------------------------------------#
-
-#------------------------------------------------------------------------------#
-### IN-Daten (META-Daten) aus der Filmdatei lesen
 
 #------------------------------------------------------------------------------#
 # Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '79613_Fluch_der_Karibik_13.09.14_20-15_orf1_130_TVOON_DE.mpg.HQ.cut.mp4':
@@ -454,14 +492,16 @@ REPARATUR_PARAMETER="-fflags +genpts"
 #------------------------------------------------------------------------------#
 ### Meta-Daten auslesen
 
-META_DATEN="$(ffprobe -show_data -show_streams "${FILMDATEI}" 2>/dev/null)"
+META_DATEN_INFO="$(ffprobe "${FILMDATEI}" 2>&1 | sed -ne '/^Input /,//p')"
+META_DATEN_STREAM="$(ffprobe -show_data -show_streams "${FILMDATEI}" 2>/dev/null)"
 
-echo "${META_DATEN}" | grep -E '^codec_(name|long_name|type)=' | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+echo "${META_DATEN_INFO}"                                             | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+echo "${META_DATEN_STREAM}" | grep -E '^codec_(name|long_name|type)=' | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
 #------------------------------------------------------------------------------#
 ### hier wird ermittelt, wieviele Audio-Kanäle max. im Film enthalten sind
 
-AUDIO_KANAELE="$(echo "${META_DATEN}" | sed -e '1,/^codec_type=audio/ d' | awk -F'=' '/^channels=/{print $2}' | sort -nr | head -n1)"	# max. Anzahl der vorhandenen Audio-Kanäle
+AUDIO_KANAELE="$(echo "${META_DATEN_STREAM}" | sed -e '1,/^codec_type=audio/ d' | awk -F'=' '/^channels=/{print $2}' | sort -nr | head -n1)"	# max. Anzahl der vorhandenen Audio-Kanäle
 if [ "x${STEREO}" != "x" ] ; then
 	AUDIO_KANAELE="2"
 fi
@@ -473,70 +513,142 @@ FFMPEG_LIB="$((ffmpeg -formats >/dev/null) 2>&1 | tr -s ' ' '\n' | egrep '^[-][-
 FFMPEG_FORMATS="$(ffmpeg -formats 2>/dev/null | awk '/^[ \t]*[ ][DE]+[ ]/{print $2}')"
 
 #------------------------------------------------------------------------------#
-### hier wird ermittelt, ob der film progressiv oder im Zeilensprungverfahren vorliegt
-
-#echo "--------------------------------------------------------------------------------"
-#probe "${FILMDATEI}" 2>&1 | fgrep Video:
-#echo "--------------------------------------------------------------------------------"
-#FFPROBE="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | sed 's/.* Video:/Video:/' | tr -s '[\[,\]]' '\n' | egrep '[0-9]x[0-9]|SAR |DAR | fps' | grep -Fv 'Stream #' | grep -Fv 'Video:' | tr -s '\n' ' ')"
-FFPROBE="$(ffprobe "${FILMDATEI}" 2>&1 | fgrep Video: | sed 's/.* Video:/Video:/' | tr -s '[\[,\]]' '\n' | egrep '[0-9]x[0-9]|SAR |DAR | fps' | grep -Fv 'Stream #' | grep -Fv 'Video:' | grep -Fv ')' | tr -s '\n' ' ')"
-# tbn (FPS vom Container)= the time base in AVStream that has come from the container
-# tbc (FPS vom Codec) = the time base in AVCodecContext for the codec used for a particular stream
-# tbr (FPS vom Video-Stream geraten) = tbr is guessed from the video stream and is the value users want to see when they look for the video frame rate
-echo "FFPROBE='${FFPROBE}'"
-#------------------------------------------------------------------------------#
 ### alternative Methode zur Ermittlung der FPS
-R_FPS="$(echo "${META_DATEN}" | egrep '^codec_type=|^r_frame_rate=' | egrep -A1 '^codec_type=video' | awk -F'=' '/^r_frame_rate=/{print $2}' | sed 's|/| |')"
+R_FPS="$(echo "${META_DATEN_STREAM}" | egrep '^codec_type=|^r_frame_rate=' | egrep -A1 '^codec_type=video' | awk -F'=' '/^r_frame_rate=/{print $2}' | sed 's|/| |')"
 A_FPS="$(echo "${R_FPS}" | wc -w)"
 if [ "${A_FPS}" -gt 1 ] ; then
 	R_FPS="$(echo "${R_FPS}" | awk '{print $1 / $2}')"
 fi
 #------------------------------------------------------------------------------#
 ### hier wird ermittelt, ob der film progressiv oder im Zeilensprungverfahren vorliegt
-#
-# leider kann das z.Z. nur mit "mediainfo" einfach und zuverlässig ermittelt werden
-# mit "ffprobe" ist es etwas komplizierter...
-#
-MEDIAINFO="$(mediainfo --BOM -f "${FILMDATEI}" 2>/dev/null)"
-#echo "MEDIAINFO='${MEDIAINFO}'"
 
-SCAN_TYPE="$(echo "${MEDIAINFO}" | grep -Fv pixels | awk -F':' '/Scan type[ ]+/{print $2}' | tr -s ' ' '\n' | egrep -v '^$' | head -n1)"
+# tbn (FPS vom Container)            = the time base in AVStream that has come from the container
+# tbc (FPS vom Codec)                = the time base in AVCodecContext for the codec used for a particular stream
+# tbr (FPS vom Video-Stream geraten) = tbr is guessed from the video stream and is the value users want to see when they look for the video frame rate
+
+SCAN_TYPE="$(echo "${META_DATEN_STREAM}" | awk '/^field_order=/{print $2}' | grep -Ev '^$' | head -n1)"
 echo "SCAN_TYPE='${SCAN_TYPE}'"
-if [ "${SCAN_TYPE}" != "Progressive" ] ; then
+if [ "${SCAN_TYPE}" != "progressive" ] ; then
         ### wenn der Film im Zeilensprungverfahren vorliegt
         ZEILENSPRUNG="yadif,"
 fi
 
 #exit 17
 
-# FFPROBE=' 720x576 SAR 64:45 DAR 16:9 25 fps '
-# FFPROBE=" 852x480 SAR 1:1 DAR 71:40 25 fps "
-# FFPROBE=' 1920x800 SAR 1:1 DAR 12:5 23.98 fps '
-IN_XY="$(echo "${FFPROBE}" | fgrep ' DAR ' | awk '{print $1}')"
-IN_BREIT="$(echo "${IN_XY}" | awk -F'x' '{print $1}')"
-IN_HOCH="$(echo  "${IN_XY}" | awk -F'x' '{print $2}')"
-IN_PAR="$(echo "${FFPROBE}" | fgrep ' DAR ' | awk '{print $3}')"
-IN_DAR="$(echo "${FFPROBE}" | fgrep ' DAR ' | awk '{print $5}')"
-IN_FPS="$(echo "${FFPROBE}" | fgrep ' DAR ' | awk '{print $6}')"		# wird benötigt um den Farbraum für BluRay zu ermitteln
-IN_FPS_RUND="$(echo "${IN_FPS}" | awk '{printf "%.0f\n", $1}')"			# für Vergleiche, "if" erwartet einen Integerwert
-IN_BITRATE="$(echo "${MEDIAINFO}" | sed -ne '/^Video$/,/^$/ p' | egrep '^Bit rate' | awk -F':' '{print $2}' | sed 's/[ ]*//g;s/[a-zA-Z/][a-zA-Z/]*$/ &/' | tail -n1)"
-IN_BIT_EINH="$(echo "${IN_BITRATE}" | awk '{print $2}')"
+# META_DATEN_STREAM=" width=720 "
+# META_DATEN_STREAM=" height=576 "
+IN_BREIT="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^width=/{print $2}' | grep -Fv 'N/A' | head -n1)"
+IN_HOCH="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^height=/{print $2}' | grep -Fv 'N/A' | head -n1)"
+IN_XY="${IN_BREIT}x${IN_HOCH}"
+echo "
+1 IN_XY='${IN_XY}'
+1 IN_BREIT='${IN_BREIT}'
+1 IN_HOCH='${IN_HOCH}'
+" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+if [ "${IN_XY}" == "x" ] ; then
+	# META_DATEN_INFO=' 720x576 SAR 64:45 DAR 16:9 25 fps '
+	# META_DATEN_INFO=" 852x480 SAR 1:1 DAR 71:40 25 fps "
+	# META_DATEN_INFO=' 1920x800 SAR 1:1 DAR 12:5 23.98 fps '
+	IN_XY="$(echo "${META_DATEN_INFO}" | fgrep 'Video: ' | tr -s ',' '\n' | fgrep ' DAR ' | awk '{print $1}' | head -n1)"
+	IN_BREIT="$(echo "${IN_XY}" | awk -F'x' '{print $1}')"
+	IN_HOCH="$(echo  "${IN_XY}" | awk -F'x' '{print $2}')"
+	echo "
+	2 IN_XY='${IN_XY}'
+	2 IN_BREIT='${IN_BREIT}'
+	2 IN_HOCH='${IN_HOCH}'
+	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	if [ "x${IN_XY}" == "x" ] ; then
+		# META_DATEN_STREAM=" coded_width=0 "
+		# META_DATEN_STREAM=" coded_height=0 "
+		IN_BREIT="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^coded_width=/{print $2}' | grep -Fv 'N/A' | grep -Ev '^0$' | head -n1)"
+		IN_HOCH="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^coded_height=/{print $2}' | grep -Fv 'N/A' | grep -Ev '^0$' | head -n1)"
+		IN_XY="${IN_BREIT}x${IN_HOCH}"
+		echo "
+		3 IN_XY='${IN_XY}'
+		3 IN_BREIT='${IN_BREIT}'
+		3 IN_HOCH='${IN_HOCH}'
+		" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	fi
+fi
 
+IN_PAR="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^sample_aspect_ratio=/{print $2}' | grep -Fv 'N/A' | head -n1)"
+echo "
+1 IN_PAR='${IN_PAR}'
+" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+if [ "x${IN_PAR}" == "x" ] ; then
+	IN_PAR="$(echo "${META_DATEN_INFO}" | fgrep 'Video: ' | tr -s ',' '\n' | fgrep ' DAR ' | tr -s '[\[\]]' ' ' | awk '{print $3}')"
+	echo "
+	2 IN_PAR='${IN_PAR}'
+	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+fi
+
+IN_DAR="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^display_aspect_ratio=/{print $2}' | grep -Fv 'N/A' | head -n1)"
+echo "
+1 IN_DAR='${IN_DAR}'
+" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+if [ "x${IN_DAR}" == "x" ] ; then
+	IN_DAR="$(echo "${META_DATEN_INFO}" | fgrep 'Video: ' | tr -s ',' '\n' | fgrep ' DAR ' | tr -s '[\[\]]' ' ' | awk '{print $5}')"
+	echo "
+	2 IN_DAR='${IN_DAR}'
+	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+fi
+
+# META_DATEN_STREAM=" r_frame_rate=25/1 "
+# META_DATEN_STREAM=" avg_frame_rate=25/1 "
+# META_DATEN_STREAM=" codec_time_base=1/25 "
+IN_FPS="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^r_frame_rate=/{print $2}' | grep -Fv 'N/A' | head -n1 | awk -F'/' '{print $1}')"
+echo "
+1 IN_FPS='${IN_FPS}'
+" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+if [ "x${IN_FPS}" == "x" ] ; then
+	IN_FPS="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^avg_frame_rate=/{print $2}' | grep -Fv 'N/A' | head -n1 | awk -F'/' '{print $1}')"
+	echo "
+	2 IN_FPS='${IN_FPS}'
+	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	if [ "x${IN_FPS}" == "x" ] ; then
+		IN_FPS="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^codec_time_base=/{print $2}' | grep -Fv 'N/A' | head -n1 | awk -F'/' '{print $2}')"
+		echo "
+		3 IN_FPS='${IN_FPS}'
+		" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+		if [ "x${IN_FPS}" == "x" ] ; then
+			IN_FPS="$(echo "${META_DATEN_INFO}" | fgrep 'Video: ' | tr -s ',' '\n' | fgrep ' fps' | awk '{print $1}')"			# wird benötigt um den Farbraum für BluRay zu ermitteln
+			echo "
+			4 IN_FPS='${IN_FPS}'
+			" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+		fi
+	fi
+fi
+
+IN_FPS_RUND="$(echo "${IN_FPS}" | awk '{printf "%.0f\n", $1}')"			# für Vergleiche, "if" erwartet einen Integerwert
+
+IN_BIT_RATE="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^bit_rate=/{print $2}' | grep -Fv 'N/A' | head -n1)"
+echo "
+1 IN_BIT_RATE='${IN_BIT_RATE}'
+" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+if [ "x${IN_BIT_RATE}" == "x" ] ; then
+	IN_BIT_RATE="$(echo "${META_DATEN_INFO}" | grep -F 'Video: ' | tr -s ',' '\n' | awk -F':' '/bitrate: /{print $2}' | tail -n1)"
+	echo "
+	2 IN_BIT_RATE='${IN_BIT_RATE}'
+	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	if [ "x${IN_BIT_RATE}" == "x" ] ; then
+		IN_BIT_RATE="$(echo "${META_DATEN_INFO}" | grep -F 'Duration: ' | tr -s ',' '\n' | awk -F':' '/bitrate: /{print $2}' | tail -n1)"
+		echo "
+		3 IN_BIT_RATE='${IN_BIT_RATE}'
+		" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	fi
+fi
+
+IN_BIT_EINH="$(echo "${IN_BIT_RATE}" | awk '{print $2}')"
 case "${IN_BIT_EINH}" in
-        [Kk]b[p/]s)
-                        IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1}')"
+        [Kk]b[p/]s|[Kk]b[/]s)
+                        IN_BITRATE_KB="$(echo "${IN_BIT_RATE}" | awk '{print $1}')"
                         ;;
-        [Mm]b[p/]s)
-                        IN_BIT_RATE="$(echo "${IN_BITRATE}" | awk '{print $1 * 1024}')"
-                        ;;
-        *)
-                        unset IN_BIT_RATE
+        [Mm]b[p/]s|[Mm]b[/]s)
+                        IN_BITRATE_KB="$(echo "${IN_BIT_RATE}" | awk '{print $1 * 1024}')"
                         ;;
 esac
-unset IN_BITRATE
-unset IN_BIT_EINH
 
-M_INFOS="
+echo "
 IN_XY='${IN_XY}'
 IN_BREIT='${IN_BREIT}'
 IN_HOCH='${IN_HOCH}'
@@ -544,14 +656,17 @@ IN_PAR='${IN_PAR}'
 IN_DAR='${IN_DAR}'
 IN_FPS='${IN_FPS}'
 IN_FPS_RUND='${IN_FPS_RUND}'
-IN_BITRATE='${IN_BITRATE}'
 IN_BIT_RATE='${IN_BIT_RATE}'
 IN_BIT_EINH='${IN_BIT_EINH}'
+IN_BITRATE_KB='${IN_BITRATE_KB}'
 BILDQUALIT='${BILDQUALIT}'
 TONQUALIT='${TONQUALIT}'
-"
-echo "${M_INFOS}"
+" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
+unset IN_BIT_RATE
+unset IN_BIT_EINH
+
+#exit 18
 
 #==============================================================================#
 ### Korrektur: gelesene IN-Daten mit übergebenen IST-Daten überschreiben
@@ -631,6 +746,10 @@ fi
 }
 
 ARBEITSWERTE_PAR
+
+echo "
+PAR_FAKTOR='${PAR_FAKTOR}'
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
 
 #------------------------------------------------------------------------------#
@@ -853,47 +972,6 @@ FORMAT_ANPASSUNG="setsar='1/1',"
 
 
 #==============================================================================#
-#==============================================================================#
-# Das Video-Format wird nach der Dateiendung ermittelt
-# deshalb muss ermittelt werden, welche Dateiendung der Name der Ziel-Datei hat
-#
-# Wenn der Name der Quell-Datei und der Name der Ziel-Datei gleich sind,
-# dann wird dem Namen der Ziel-Datei ein "Nr2" vor der Endung angehängt
-#
-
-QUELL_BASIS_NAME="$(echo "${QUELL_DATEI}" | awk '{print tolower($0)}')"
-ZIEL_BASIS_NAME="$(echo "${ZIELDATEI}" | awk '{print tolower($0)}')"
-
-ZIELNAME="$(echo "${ZIELDATEI}" | rev | sed 's/[ ][ ]*/_/g;s/.*[.]//' | rev)"
-ENDUNG="$(echo "${ZIEL_BASIS_NAME}" | rev | sed 's/[a-zA-Z0-9\_\-\+/][a-zA-Z0-9\_\-\+/]*[.]/&"/;s/[.]".*//' | rev)"
-
-if [ "${ENDUNG}" != "mp4" ] ; then 
-	echo "Fehler: Die Endung der Zieldatei darf nur 'mp4' sein."
-	exit 232
-fi
-
-if [ "${QUELL_BASIS_NAME}" = "${ZIEL_BASIS_NAME}" ] ; then
-	ZIELNAME="${ZIELNAME}_Nr2"
-fi
-
-#------------------------------------------------------------------------------#
-### ab hier kann in die Log-Datei geschrieben werden
-
-#rm -f ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-echo "# $(date +'%F %T')
-${0} ${Film2Standardformat_OPTIONEN}" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-
-echo "
-${FORMAT_BESCHREIBUNG}
-" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-
-echo "${M_INFOS}
-PAR_FAKTOR='${PAR_FAKTOR}'
-" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-
-#------------------------------------------------------------------------------#
-
-###====
 
 #echo "IN_FPS='${IN_FPS}'"
 #exit 24
@@ -973,11 +1051,11 @@ VERSION="v2018082300"
 #------------------------------------------------------------------------------#
 
 echo "1 BILDQUALIT='${BILDQUALIT}'" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-echo "IN_BIT_RATE='${IN_BIT_RATE}'" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+echo "IN_BITRATE_KB='${IN_BITRATE_KB}'" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
 if [ "${BILDQUALIT}" = "auto" ] ; then
-	if [ "x${IN_BIT_RATE}" != "x" ] ; then
-		IN_BIT_je_BP="$(echo "${IN_BIT_RATE} ${IN_BREIT} ${IN_HOCH}" | awk '{printf "%.0f\n", $1 * 10000 / $2 / $3}')"
+	if [ "x${IN_BITRATE_KB}" != "x" ] ; then
+		IN_BIT_je_BP="$(echo "${IN_BITRATE_KB} ${IN_BREIT} ${IN_HOCH}" | awk '{printf "%.0f\n", $1 * 10000 / $2 / $3}')"
 		echo "IN_BIT_je_BP='${IN_BIT_je_BP}'" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
 		if   [ "${IN_BIT_je_BP}" -gt "26" ] ; then
@@ -1667,14 +1745,14 @@ if [ "${UNTERTITEL}" == "-1" ] ; then
 	U_TITEL_FF=""
 else
     if [ "x${UNTERTITEL}" == "x" ] ; then
-	UT_LISTE="$(echo "${META_DATEN}" | fgrep -i codec_type=subtitle | nl | awk '{print $1 - 1}' | tr -s '\n' ' ')"
+	UT_LISTE="$(echo "${META_DATEN_STREAM}" | fgrep -i codec_type=subtitle | nl | awk '{print $1 - 1}' | tr -s '\n' ' ')"
     else
 	UT_LISTE="$(echo "${UNTERTITEL}" | sed 's/,/ /g')"
     fi
 
     U_TITEL_FF="$(for DER_UT in ${UT_LISTE}
     do
-	echo -n " -map 0:s:${DER_UT} -c:s copy"
+	echo -n " -map 0:s:${DER_UT}? -c:s copy"
     done)"
 fi
 
@@ -1689,7 +1767,7 @@ U_TITEL_FF=${U_TITEL_FF}
 # Audio
 
 if [ "x${TONSPUR}" == "x" ] ; then
-        TSNAME="$(echo "${META_DATEN}" | fgrep -i codec_type=audio | nl | awk '{print $1 - 1}' | tr -s '\n' ',' | sed 's/^,//;s/,$//')"
+        TSNAME="$(echo "${META_DATEN_STREAM}" | fgrep -i codec_type=audio | nl | awk '{print $1 - 1}' | tr -s '\n' ',' | sed 's/^,//;s/,$//')"
 else
 	TSNAME="${TONSPUR}"
 fi

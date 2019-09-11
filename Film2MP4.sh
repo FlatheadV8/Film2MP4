@@ -27,7 +27,8 @@
 #VERSION="v2019082800"
 #VERSION="v2019090800"
 #VERSION="v2019090900"
-VERSION="v2019091000"
+#VERSION="v2019091000"
+VERSION="v2019091100"
 
 
 BILDQUALIT="auto"
@@ -451,7 +452,6 @@ fi
 #------------------------------------------------------------------------------#
 ### ab hier kann in die Log-Datei geschrieben werden
 
-#rm -f ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 echo "# $(date +'%F %T')
 ${0} ${Film2Standardformat_OPTIONEN}" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
@@ -544,7 +544,7 @@ echo "
 1 IN_XY='${IN_XY}'
 1 IN_BREIT='${IN_BREIT}'
 1 IN_HOCH='${IN_HOCH}'
-" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 if [ "${IN_XY}" == "x" ] ; then
 	# META_DATEN_INFO=' 720x576 SAR 64:45 DAR 16:9 25 fps '
 	# META_DATEN_INFO=" 852x480 SAR 1:1 DAR 71:40 25 fps "
@@ -556,7 +556,7 @@ if [ "${IN_XY}" == "x" ] ; then
 	2 IN_XY='${IN_XY}'
 	2 IN_BREIT='${IN_BREIT}'
 	2 IN_HOCH='${IN_HOCH}'
-	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	if [ "x${IN_XY}" == "x" ] ; then
 		# META_DATEN_STREAM=" coded_width=0 "
 		# META_DATEN_STREAM=" coded_height=0 "
@@ -567,30 +567,30 @@ if [ "${IN_XY}" == "x" ] ; then
 		3 IN_XY='${IN_XY}'
 		3 IN_BREIT='${IN_BREIT}'
 		3 IN_HOCH='${IN_HOCH}'
-		" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+		" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	fi
 fi
 
 IN_PAR="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^sample_aspect_ratio=/{print $2}' | grep -Fv 'N/A' | head -n1)"
 echo "
 1 IN_PAR='${IN_PAR}'
-" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 if [ "x${IN_PAR}" == "x" ] ; then
 	IN_PAR="$(echo "${META_DATEN_INFO}" | fgrep 'Video: ' | tr -s ',' '\n' | fgrep ' DAR ' | tr -s '[\[\]]' ' ' | awk '{print $3}')"
 	echo "
 	2 IN_PAR='${IN_PAR}'
-	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 fi
 
 IN_DAR="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^display_aspect_ratio=/{print $2}' | grep -Fv 'N/A' | head -n1)"
 echo "
 1 IN_DAR='${IN_DAR}'
-" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 if [ "x${IN_DAR}" == "x" ] ; then
 	IN_DAR="$(echo "${META_DATEN_INFO}" | fgrep 'Video: ' | tr -s ',' '\n' | fgrep ' DAR ' | tr -s '[\[\]]' ' ' | awk '{print $5}')"
 	echo "
 	2 IN_DAR='${IN_DAR}'
-	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 fi
 
 # META_DATEN_STREAM=" r_frame_rate=25/1 "
@@ -599,22 +599,22 @@ fi
 IN_FPS="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^r_frame_rate=/{print $2}' | grep -Fv 'N/A' | head -n1 | awk -F'/' '{print $1}')"
 echo "
 1 IN_FPS='${IN_FPS}'
-" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 if [ "x${IN_FPS}" == "x" ] ; then
 	IN_FPS="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^avg_frame_rate=/{print $2}' | grep -Fv 'N/A' | head -n1 | awk -F'/' '{print $1}')"
 	echo "
 	2 IN_FPS='${IN_FPS}'
-	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	if [ "x${IN_FPS}" == "x" ] ; then
 		IN_FPS="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^codec_time_base=/{print $2}' | grep -Fv 'N/A' | head -n1 | awk -F'/' '{print $2}')"
 		echo "
 		3 IN_FPS='${IN_FPS}'
-		" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+		" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 		if [ "x${IN_FPS}" == "x" ] ; then
 			IN_FPS="$(echo "${META_DATEN_INFO}" | fgrep 'Video: ' | tr -s ',' '\n' | fgrep ' fps' | awk '{print $1}')"			# wird benötigt um den Farbraum für BluRay zu ermitteln
 			echo "
 			4 IN_FPS='${IN_FPS}'
-			" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+			" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 		fi
 	fi
 fi
@@ -624,17 +624,17 @@ IN_FPS_RUND="$(echo "${IN_FPS}" | awk '{printf "%.0f\n", $1}')"			# für Verglei
 IN_BIT_RATE="$(echo "${META_DATEN_STREAM}" | sed -ne '/video/,/STREAM/ p' | awk -F'=' '/^bit_rate=/{print $2}' | grep -Fv 'N/A' | head -n1)"
 echo "
 1 IN_BIT_RATE='${IN_BIT_RATE}'
-" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 if [ "x${IN_BIT_RATE}" == "x" ] ; then
 	IN_BIT_RATE="$(echo "${META_DATEN_INFO}" | grep -F 'Video: ' | tr -s ',' '\n' | awk -F':' '/bitrate: /{print $2}' | tail -n1)"
 	echo "
 	2 IN_BIT_RATE='${IN_BIT_RATE}'
-	" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	if [ "x${IN_BIT_RATE}" == "x" ] ; then
 		IN_BIT_RATE="$(echo "${META_DATEN_INFO}" | grep -F 'Duration: ' | tr -s ',' '\n' | awk -F':' '/bitrate: /{print $2}' | tail -n1)"
 		echo "
 		3 IN_BIT_RATE='${IN_BIT_RATE}'
-		" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+		" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	fi
 fi
 
@@ -661,7 +661,7 @@ IN_BIT_EINH='${IN_BIT_EINH}'
 IN_BITRATE_KB='${IN_BITRATE_KB}'
 BILDQUALIT='${BILDQUALIT}'
 TONQUALIT='${TONQUALIT}'
-" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
 unset IN_BIT_RATE
 unset IN_BIT_EINH

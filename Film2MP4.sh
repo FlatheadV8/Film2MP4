@@ -25,10 +25,7 @@
 #VERSION="v2019032600"
 #VERSION="v2019051700"
 #VERSION="v2019082800"
-#VERSION="v2019090800"
-#VERSION="v2019090900"
-#VERSION="v2019091000"
-VERSION="v2019091100"
+VERSION="v2019091200"  # -probesize 9223372000G -analyzeduration 9223372000G
 
 
 BILDQUALIT="auto"
@@ -275,7 +272,7 @@ while [ "${#}" -ne "0" ]; do
                         ;;
                 -g)
 			echo "${BILD_FORMATNAMEN_AUFLOESUNGEN}"
-                        exit 11
+                        exit 20
                         ;;
                 -h)
 			ausgabe_hilfe
@@ -371,7 +368,7 @@ while [ "${#}" -ne "0" ]; do
 	mögliche Namen von Grafikauflösungen anzeigen
 	=> ${0} -g
                         "
-                        exit 12
+                        exit 30
                         ;;
                 *)
                         if [ "$(echo "${1}"|egrep '^-')" ] ; then
@@ -394,24 +391,22 @@ fi
 
 if [ "x${PROGRAMM}" == "x" ] ; then
 	echo "Weder avconv noch ffmpeg konnten gefunden werden. Abbruch!"
-	exit 15
+	exit 40
 fi
-
-REPARATUR_PARAMETER="-fflags +genpts"
 
 #==============================================================================#
 ### Trivialitäts-Check
 
 if [ "${STOP}" = "Ja" ] ; then
         echo "Bitte korrigieren sie die falschen Parameter. Abbruch!"
-        exit 13
+        exit 50
 fi
 
 #------------------------------------------------------------------------------#
 
 if [ ! -r "${FILMDATEI}" ] ; then
         echo "Der Film '${FILMDATEI}' konnte nicht gefunden werden. Abbruch!"
-        exit 14
+        exit 60
 fi
 
 #------------------------------------------------------------------------------#
@@ -442,7 +437,7 @@ ENDUNG="$(echo "${ZIEL_BASIS_NAME}" | rev | sed 's/[a-zA-Z0-9\_\-\+/][a-zA-Z0-9\
 
 if [ "${ENDUNG}" != "mp4" ] ; then 
 	echo "Fehler: Die Endung der Zieldatei darf nur 'mp4' sein."
-	exit 232
+	exit 70
 fi
 
 if [ "${QUELL_BASIS_NAME}" = "${ZIEL_BASIS_NAME}" ] ; then
@@ -460,8 +455,24 @@ ${FORMAT_BESCHREIBUNG}
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
 #------------------------------------------------------------------------------#
+### diese Optionen sind für ffprobe und ffmpeg notwendeig,
+### damit auch die Spuren gefunden werden, die später als 5 Sekunden nach
+### Filmbeginn einsetzen
 
-###====
+## -probesize 18446744070G		# I64_MAX
+## -analyzeduration 18446744070G	# I64_MAX
+#KOMPLETT_DURCHSUCHEN="-probesize 18446744070G -analyzeduration 18446744070G"
+
+## Value 19807040624582983680.000000 for parameter 'analyzeduration' out of range [0 - 9.22337e+18]
+## Value 19807040624582983680.000000 for parameter 'analyzeduration' out of range [0 - 9.22337e+18]
+## -probesize 9223370Ki
+## -analyzeduration 9223370Ki
+KOMPLETT_DURCHSUCHEN="-probesize 9223372000G -analyzeduration 9223372000G"
+
+#------------------------------------------------------------------------------#
+### Parameter zum reparieren defekter Container
+
+REPARATUR_PARAMETER="-fflags +genpts"
 
 #==============================================================================#
 #==============================================================================#
@@ -492,8 +503,9 @@ ${FORMAT_BESCHREIBUNG}
 #------------------------------------------------------------------------------#
 ### Meta-Daten auslesen
 
-META_DATEN_INFO="$(ffprobe "${FILMDATEI}" 2>&1 | sed -ne '/^Input /,//p')"
-META_DATEN_STREAM="$(ffprobe -show_data -show_streams "${FILMDATEI}" 2>/dev/null)"
+META_DATEN_KOMPLETT="$(ffprobe ${KOMPLETT_DURCHSUCHEN} -show_data -show_streams -i "${FILMDATEI}" 2>&1)"
+META_DATEN_INFO="$(echo   "${META_DATEN_KOMPLETT}" | sed -ne '/^Input /,/STREAM/p')"
+META_DATEN_STREAM="$(echo "${META_DATEN_KOMPLETT}" | sed -e  '1,/STREAM/d')"
 
 echo "${META_DATEN_INFO}"                                             | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 echo "${META_DATEN_STREAM}" | grep -E '^codec_(name|long_name|type)=' | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
@@ -533,7 +545,7 @@ if [ "${SCAN_TYPE}" != "progressive" ] ; then
         ZEILENSPRUNG="yadif,"
 fi
 
-#exit 17
+#exit 80
 
 # META_DATEN_STREAM=" width=720 "
 # META_DATEN_STREAM=" height=576 "
@@ -648,7 +660,7 @@ case "${IN_BIT_EINH}" in
                         ;;
 esac
 
-echo "
+echo "# 90
 IN_XY='${IN_XY}'
 IN_BREIT='${IN_BREIT}'
 IN_HOCH='${IN_HOCH}'
@@ -666,7 +678,7 @@ TONQUALIT='${TONQUALIT}'
 unset IN_BIT_RATE
 unset IN_BIT_EINH
 
-#exit 18
+#exit 90
 
 #==============================================================================#
 ### Korrektur: gelesene IN-Daten mit übergebenen IST-Daten überschreiben
@@ -698,6 +710,7 @@ fi
 
 
 if [ -z "${IN_XY}" ] ; then
+	echo "# 100"
 	echo "Es konnte die Video-Auflösung nicht ermittelt werden."
 	echo "versuchen Sie es mit diesem Parameter nocheinmal:"
 	echo "-in_xmaly"
@@ -707,9 +720,10 @@ if [ -z "${IN_XY}" ] ; then
 	echo "z.B. (HDTV)    : -in_xmaly 1280x720"
 	echo "z.B. (FullHD)  : -in_xmaly 1920x1080"
 	echo "ABBRUCH!"
-	exit 19
+	exit 100
 fi
 
+#exit 110
 
 #------------------------------------------------------------------------------#
 ### Seitenverhältnis des Bildes (DAR)
@@ -722,7 +736,7 @@ fi
 #----------------------------------------------------------------------#
 ### Seitenverhältnis der Bildpunkte (PAR / SAR)
 
-if [ -n "${IST_PAR}" ] ; then
+if [ "x${IST_PAR}" == "x" ] ; then
 	IN_PAR="${IST_PAR}"
 fi
 
@@ -747,20 +761,22 @@ fi
 
 ARBEITSWERTE_PAR
 
-echo "
+echo "# 110
 PAR_FAKTOR='${PAR_FAKTOR}'
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
+#exit 120
 
 #------------------------------------------------------------------------------#
 ### Kontrolle Seitenverhältnis des Bildes (DAR)
 
-if [ -z "${IN_DAR}" ] ; then
+if [ "x${IN_DAR}" == "x" ] ; then
 	IN_DAR="$(echo "${IN_BREIT} ${IN_HOCH} ${PAR_KOMMA}" | awk '{printf("%.16f\n",$3/($2/$1))}')"
 fi
 
 
 if [ -z "${IN_DAR}" ] ; then
+	echo "# 120"
 	echo "Es konnte das Seitenverhältnis des Bildes nicht ermittelt werden."
 	echo "versuchen Sie es mit einem dieser beiden Parameter nocheinmal:"
 	echo "-in_dar"
@@ -773,7 +789,7 @@ if [ -z "${IN_DAR}" ] ; then
 	echo "z.B. (DVB/DVD) : -in_par 64:45"
 	echo "z.B. (BluRay)  : -in_par  1:1"
 	echo "ABBRUCH!"
-	exit 20
+	exit 130
 fi
 
 
@@ -834,12 +850,13 @@ fi
 ### Seitenverhältnis des Bildes (DAR) muss hier bekannt sein!
 
 if [ -z "${DAR_FAKTOR}" ] ; then
+	echo "# 130"
 	echo "Es konnte das Display-Format nicht ermittelt werden."
 	echo "versuchen Sie es mit diesem Parameter nocheinmal:"
 	echo "-dar"
 	echo "z.B.: -dar 16:9"
 	echo "ABBRUCH!"
-	exit 21
+	exit 140
 fi
 
 
@@ -905,11 +922,12 @@ else
 	fi
 fi
 
-echo "
+echo "# 150
 #1 SOLL_XY="${SOLL_XY}"
 #2 SOLL_SCALE="${SOLL_SCALE}"
 "
 
+#exit 150
 
 #------------------------------------------------------------------------------#
 ### Übersetzung von Bildauflösungsnamen zu Bildauflösungen
@@ -926,16 +944,17 @@ if [ "x${SOLL_XY}" != "x" ] ; then
 			echo "Die gewünschte Bildauflösung wurde als 'Name' angegeben: '${SOLL_XY}'"
 			echo "Für die Übersetzung wird die Datei 'Filmwandler_grafik.txt' benötigt."
 			echo "Leider konnte die Datei '$(dirname ${0})/Filmwandler_grafik.txt' nicht gelesen werden."
-			exit 22
+			exit 160
 		fi
 	fi
 fi
 
-echo "
+echo "# 170
 #3 SOLL_XY="${SOLL_XY}"
 #4 SOLL_SCALE="${SOLL_SCALE}"
 "
 
+#exit 170
 
 #------------------------------------------------------------------------------#
 ### hier wird ausgerechnen wieviele Pixel der neue Film pro Bild haben wird
@@ -958,12 +977,12 @@ fi
 
 #------------------------------------------------------------------------------#
 
-echo "
+echo "# 180
 Originalauflösung   =${IN_BREIT}x${IN_HOCH}
 erwünschte Auflösung=${SOLL_XY}
 PIXELZAHL           =${PIXELZAHL}
 "
-#exit 23
+#exit 180
 
 #------------------------------------------------------------------------------#
 ### quadratische Bildpunkte sind der Standard
@@ -974,7 +993,8 @@ FORMAT_ANPASSUNG="setsar='1/1',"
 #==============================================================================#
 
 #echo "IN_FPS='${IN_FPS}'"
-#exit 24
+#exit 190
+
 ################################################################################
 ### Filmwandler_Format_mp4.txt
 #------------------------------------------------------------------------------#
@@ -1168,12 +1188,12 @@ AUDIOCODEC="$(echo "${FFMPEG_LIB}" | egrep "${CODEC_PATTERN}" | head -n1)"
 if [ "x${AUDIOCODEC}" = "x" ] ; then
 	AUDIOCODEC="$(echo "${FFMPEG_FORMATS}" | egrep "${CODEC_PATTERN}" | head -n1)"
 	if [ "x${AUDIOCODEC}" = "x" ] ; then
-		echo ""
+		echo "# 200"
 		echo "${CODEC_PATTERN}"
 		echo "Leider wird dieser Codec von der aktuell installierten Version"
 		echo "von FFmpeg nicht unterstützt!"
 		echo ""
-		exit 1
+		exit 200
 	fi
 fi
 
@@ -1234,12 +1254,12 @@ VIDEOCODEC="$(echo "${FFMPEG_LIB}" | fgrep "${CODEC_PATTERN}" | head -n1)"
 if [ "x${VIDEOCODEC}" = "x" ] ; then
 	VIDEOCODEC="$(echo "${FFMPEG_FORMATS}" | fgrep "${CODEC_PATTERN}" | head -n1)"
 	if [ "x${VIDEOCODEC}" = "x" ] ; then
-		echo ""
+		echo "# 210"
 		echo "${CODEC_PATTERN}"
 		echo "Leider wird dieser Codec von der aktuell installierten Version"
 		echo "von FFmpeg nicht unterstützt!"
 		echo ""
-		exit 1
+		exit 210
 	fi
 fi
 
@@ -1411,11 +1431,11 @@ BLURAY_PARAMETER()
         BHVERH="$(echo "${MBREITE} ${MHOEHE} ${MaxFS}" | awk '{verhaeltnis="gut"; if ($1 > (sqrt($3 * 8))) verhaeltnis="schlecht" ; if ($2 > (sqrt($3 * 8))) verhaeltnis="schlecht" ; print verhaeltnis}')"
 
         if [ "${BHVERH}" != "gut" ] ; then
-                echo "# BLURAY_PARAMETER:
+                echo "# 200 BLURAY_PARAMETER:
                 Seitenverhaeltnis wird von AVC nicht unterstuetzt!
                 ABBRUCH
                 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-                exit 1
+                exit 220
         fi
 
         BIAF420="$(echo "${QUADR_BREIT} ${QUADR_HOCH}" | awk '{print $1 * $2 * 1.5}')"
@@ -1630,10 +1650,10 @@ FORMAT_BESCHREIBUNG="
 
 ###====
 
-echo "
+echo "# 230
 OP_QUELLE='${OP_QUELLE}'
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-#exit 25
+#exit 230
 
 #==============================================================================#
 ### Qualität
@@ -1725,14 +1745,14 @@ esac
 
 #------------------------------------------------------------------------------#
 
-echo "
+echo "# 240
 AUDIOCODEC=${AUDIOCODEC}
 AUDIOQUALITAET=${AUDIOQUALITAET}
 
 VIDEOCODEC=${VIDEOCODEC}
 VIDEOQUALITAET=${VIDEOQUALITAET}
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-#exit 26
+#exit 240
 
 #==============================================================================#
 ### Untertitel
@@ -1752,16 +1772,16 @@ else
 
     U_TITEL_FF="$(for DER_UT in ${UT_LISTE}
     do
-	echo -n " -map 0:s:${DER_UT}? -c:s copy"
+	echo -n " -map 0:s:${DER_UT} -c:s copy"
     done)"
 fi
 
-echo "
+echo "# 250
 UNTERTITEL=${UNTERTITEL}
 UT_LISTE=${UT_LISTE}
 U_TITEL_FF=${U_TITEL_FF}
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-#exit 16
+#exit 250
 
 #==============================================================================#
 # Audio
@@ -1836,7 +1856,7 @@ START_ZIEL_FORMAT="-f ${FORMAT}"
 
 #==============================================================================#
 
-echo "
+echo "# 260
 TS_LISTE=${TS_LISTE}
 TS_ANZAHL=${TS_ANZAHL}
 
@@ -1846,7 +1866,7 @@ AUDIO_VERARBEITUNG_02=${AUDIO_VERARBEITUNG_02}
 VIDEOOPTION=${VIDEOOPTION}
 START_ZIEL_FORMAT=${START_ZIEL_FORMAT}
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-#exit 27
+#exit 260
 
 
 #------------------------------------------------------------------------------#
@@ -1856,10 +1876,10 @@ if [ -z "${SCHNITTZEITEN}" ] ; then
 	### hier der Film transkodiert                                       ###
 	###------------------------------------------------------------------###
 	echo
-	echo "1: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	echo "1: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	echo
 #>
-	         ${PROGRAMM} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} 2>&1
+	         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} 2>&1
 
 else
 
@@ -1887,14 +1907,14 @@ else
 		### hier werden die Teile zwischen der Werbung transkodiert  ###
 		###----------------------------------------------------------###
 		echo
-		echo "2: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+		echo "2: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 		echo
 #>
-		         ${PROGRAMM} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} 2>&1
+		         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} 2>&1
 
 		### das ist nicht nötig, wenn das End-Container-Format bereits MKV ist
 		if [ "${ENDUNG}" != "mkv" ] ; then
-			ffmpeg -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} -c:v copy -c:a copy ${U_TITEL_FF} -f matroska -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.mkv && rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}
+			${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} -c:v copy -c:a copy ${U_TITEL_FF} -f matroska -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.mkv && rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}
 		fi
 
 		echo "---------------------------------------------------------"
@@ -1906,9 +1926,9 @@ else
 	mkvmerge -o ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${FILM_TEILE}
 
 	# den vertigen Film aus dem MKV-Format in das MP$-Format umwandeln
-	echo "4: ${PROGRAMM} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}"
+	echo "4: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}"
 #>
-	         ${PROGRAMM} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
+	         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
 
 	#ls -lh ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.mkv ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv
 	#echo "rm -f ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.mkv ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv"
@@ -1917,12 +1937,15 @@ else
 fi
 #------------------------------------------------------------------------------#
 
-echo "
-5: ${PROGRAMM} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
-"
+echo "# 270
+5: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
 #------------------------------------------------------------------------------#
 
 ls -lh ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 LAUFZEIT="$(echo "${STARTZEITPUNKT} $(date +'%s')" | awk '{print $2 - $1}')"
-echo "# $(date +'%F %T') (${LAUFZEIT})" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-#exit 28
+echo "# 280
+$(date +'%F %T') (${LAUFZEIT})" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
+#exit 280

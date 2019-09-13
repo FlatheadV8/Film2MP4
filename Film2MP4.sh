@@ -1575,7 +1575,7 @@ BLURAY_PARAMETER ${LEVEL} ${QUADR_MAKROBLOECKE} ${MaxFS}
 ### und die kodierte Datei wird 10-36% kleiner sein
 # --no-psy
 
-### diese Option verbessert die Qualität
+### diese Option ("-tune film") verbessert die Qualität
 ### und vergrößert die kodierte Datei um ca. 15-20%
 # -tune zerolatency
 # -tune fastdecode
@@ -1584,7 +1584,6 @@ BLURAY_PARAMETER ${LEVEL} ${QUADR_MAKROBLOECKE} ${MaxFS}
 #------------------------------------------------------------------------------#
 
 #VIDEO_OPTION="-profile:v ${PROFILE} -preset veryslow -tune film -x264opts ref=4:b-pyramid=strict:bluray-compat=1:weightp=0:vbv-maxrate=${MaxBR}:vbv-bufsize=${MaxCPB}:level=${LEVEL}:slices=4:b-adapt=2:direct=auto:colorprim=${FARBCOD}:transfer=${FARBCOD}:colormatrix=${FARBCOD}:keyint=${KEYINT}:aud:subme=9"
-
 VIDEO_OPTION="-profile:v ${PROFILE} -preset veryslow -tune film -x264opts ref=4:b-pyramid=strict:bluray-compat=1:weightp=0:vbv-maxrate=${MaxBR}:vbv-bufsize=${MaxCPB}:level=${LEVEL}:slices=4:b-adapt=2:direct=auto:colorprim=${FARBCOD}:transfer=${FARBCOD}:colormatrix=${FARBCOD}:keyint=${KEYINT}:aud:subme=9:nal-hrd=vbr"
 
 # Stream funktion bei mp4 für SmartTV etc aktivieren
@@ -1870,7 +1869,7 @@ START_ZIEL_FORMAT=${START_ZIEL_FORMAT}
 
 
 #------------------------------------------------------------------------------#
-if [ -z "${SCHNITTZEITEN}" ] ; then
+if [ "x${SCHNITTZEITEN}" = "x" ] ; then
 
 	###------------------------------------------------------------------###
 	### hier der Film transkodiert                                       ###

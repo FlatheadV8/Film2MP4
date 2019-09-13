@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 
 #------------------------------------------------------------------------------#
-# Aufgabe:
-# Skript so umbauen das mkvmerge nicht mehr benötigt wird.
-#------------------------------------------------------------------------------#
 #
 # Dieses Skript verändert NICHT die Bildwiederholrate!
 #
@@ -15,7 +12,6 @@
 # Es werden folgende Programme von diesem Skript verwendet:
 #  - ffmpeg
 #  - ffprobe
-#  - mkvmerge (aus dem Paket mkvtoolnix)
 #
 #------------------------------------------------------------------------------#
 
@@ -1760,8 +1756,10 @@ VIDEOQUALITAET=${VIDEOQUALITAET}
 # UNTERTITEL="-map 0:s:${i} -scodec copy"		# alt
 # UNTERTITEL="-map 0:s:${i} -c:s copy"			# neu
 
+UNTERTITEL_AN="-c:s copy"				# für das zusammensetzen der Filmteile
 if [ "${UNTERTITEL}" == "-1" ] ; then
 	U_TITEL_FF=""
+	UNTERTITEL_AN=""				# für das zusammensetzen der Filmteile
 else
     if [ "x${UNTERTITEL}" == "x" ] ; then
 	UT_LISTE="$(echo "${META_DATEN_STREAM}" | fgrep -i codec_type=subtitle | nl | awk '{print $1 - 1}' | tr -s '\n' ' ')"
@@ -1884,6 +1882,7 @@ else
 
 	#----------------------------------------------------------------------#
 	ZUFALL="$(head -c 100 /dev/urandom | base64 | tr -d '\n' | tr -cd '[:alnum:]' | cut -b-12)"
+	rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt
 	NUMMER="0"
 	for _SCHNITT in ${SCHNITTZEITEN}
 	do
@@ -1911,27 +1910,23 @@ else
 #>
 		         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} 2>&1
 
-		### das ist nicht nötig, wenn das End-Container-Format bereits MKV ist
-		if [ "${ENDUNG}" != "mkv" ] ; then
-			${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} -c:v copy -c:a copy ${U_TITEL_FF} -f matroska -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.mkv && rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}
-		fi
+                ### den Film in die Filmliste eintragen
+                echo "echo \"file '${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}'\" >> ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt" | tee -a ${NAME_NEU}.txt
+                echo "file '${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}'" >> ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt
 
 		echo "---------------------------------------------------------"
 	done
 
-	FILM_TEILE="$(ls -1 ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.mkv | tr -s '\n' '|' | sed 's/|/ + /g;s/ + $//')"
-	echo "3: mkvmerge -o '${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv' '${FILM_TEILE}'"
 #>
-	mkvmerge -o ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${FILM_TEILE}
-
-	# den vertigen Film aus dem MKV-Format in das MP$-Format umwandeln
-	echo "4: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}"
+		echo "
+		${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -f concat -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
+		" | tee -a ${NAME_NEU}.txt
+		${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -f concat -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
+		rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt
 #>
-	         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
 
-	#ls -lh ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.mkv ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv
-	#echo "rm -f ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.mkv ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv"
-	rm -f ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.mkv ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.mkv
+	#ls -lh ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
+	rm -f ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
 
 fi
 #------------------------------------------------------------------------------#

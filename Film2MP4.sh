@@ -1801,8 +1801,8 @@ if [ "${TS_ANZAHL}" -gt 0 ] ; then
 		_ST=""
 	else
 		# wurde die Ausgabe bereits durch die Codec-Optionen auf Stereo gesetzt?
-		BEREITS_AC2="$(echo "${AUDIOCODEC} ${AUDIOQUALITAET}" | grep -E 'ac 2|stereo')"
-		if [ "x${BEREITS_AC2}" = x ] ; then
+		BEREITS_AK2="$(echo "${AUDIOCODEC} ${AUDIOQUALITAET}" | grep -E 'ac 2|stereo')"
+		if [ "x${BEREITS_AK2}" = x ] ; then
 			_ST="${STEREO}"
 		else
 			_ST=""

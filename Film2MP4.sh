@@ -501,7 +501,8 @@ REPARATUR_PARAMETER="-fflags +genpts"
 
 META_DATEN_KOMPLETT="$(ffprobe ${KOMPLETT_DURCHSUCHEN} -show_data -show_streams -i "${FILMDATEI}" 2>&1)"
 META_DATEN_INFO="$(echo   "${META_DATEN_KOMPLETT}" | sed -ne '/^Input /,/STREAM/p')"
-META_DATEN_STREAM="$(echo "${META_DATEN_KOMPLETT}" | sed -e  '1,/STREAM/d')"
+META_DATEN_STREAM="[STREAM]
+$(echo "${META_DATEN_KOMPLETT}" | sed -e  '1,/STREAM/d')"
 
 echo "${META_DATEN_INFO}"                                             | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 echo "${META_DATEN_STREAM}" | grep -E '^codec_(name|long_name|type)=' | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt

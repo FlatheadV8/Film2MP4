@@ -21,7 +21,7 @@
 #VERSION="v2019032600"
 #VERSION="v2019051700"
 #VERSION="v2019082800"
-#VERSION="v2019091200"  # -probesize 9223372000G -analyzeduration 9223372000G
+#VERSION="v2019091200"  # -probesize 9223372036G -analyzeduration 9223372036G
 VERSION="v2019091400"
 
 
@@ -460,7 +460,7 @@ ${0} ${Film2Standardformat_OPTIONEN}" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.tx
 ## Value 19807040624582983680.000000 for parameter 'analyzeduration' out of range [0 - 9.22337e+18]
 ## -probesize 9223370Ki
 ## -analyzeduration 9223370Ki
-KOMPLETT_DURCHSUCHEN="-probesize 9223372000G -analyzeduration 9223372000G"
+KOMPLETT_DURCHSUCHEN="-probesize 9223372036G -analyzeduration 9223372036G"
 
 #KOMPLETT_DURCHSUCHEN="-probesize 100M -analyzeduration 100M"
 

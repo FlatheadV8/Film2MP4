@@ -21,7 +21,8 @@
 #VERSION="v2019032600"
 #VERSION="v2019051700"
 #VERSION="v2019082800"
-VERSION="v2019091200"  # -probesize 9223372000G -analyzeduration 9223372000G
+#VERSION="v2019091200"  # -probesize 9223372000G -analyzeduration 9223372000G
+VERSION="v2019091400"
 
 
 BILDQUALIT="auto"
@@ -446,10 +447,6 @@ fi
 echo "# $(date +'%F %T')
 ${0} ${Film2Standardformat_OPTIONEN}" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
-echo "
-${FORMAT_BESCHREIBUNG}
-" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
-
 #------------------------------------------------------------------------------#
 ### diese Optionen sind für ffprobe und ffmpeg notwendeig,
 ### damit auch die Spuren gefunden werden, die später als 5 Sekunden nach
@@ -464,6 +461,8 @@ ${FORMAT_BESCHREIBUNG}
 ## -probesize 9223370Ki
 ## -analyzeduration 9223370Ki
 KOMPLETT_DURCHSUCHEN="-probesize 9223372000G -analyzeduration 9223372000G"
+
+KOMPLETT_DURCHSUCHEN="-probesize 100M -analyzeduration 100M"
 
 #------------------------------------------------------------------------------#
 ### Parameter zum reparieren defekter Container
@@ -501,8 +500,7 @@ REPARATUR_PARAMETER="-fflags +genpts"
 
 META_DATEN_KOMPLETT="$(ffprobe ${KOMPLETT_DURCHSUCHEN} -show_data -show_streams -i "${FILMDATEI}" 2>&1)"
 META_DATEN_INFO="$(echo   "${META_DATEN_KOMPLETT}" | sed -ne '/^Input /,/STREAM/p')"
-META_DATEN_STREAM="[STREAM]
-$(echo "${META_DATEN_KOMPLETT}" | sed -e  '1,/STREAM/d')"
+META_DATEN_STREAM="$(echo "${META_DATEN_KOMPLETT}" | sed -e  '1,/STREAM/d')"
 
 echo "${META_DATEN_INFO}"                                             | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 echo "${META_DATEN_STREAM}" | grep -E '^codec_(name|long_name|type)=' | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
@@ -1640,6 +1638,10 @@ FORMAT_BESCHREIBUNG="
 ********************************************************************************
 "
 
+echo "
+${FORMAT_BESCHREIBUNG}
+" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
 #------------------------------------------------------------------------------#
 ### Filmwandler_Format_mp4.txt
 ################################################################################
@@ -1748,6 +1750,7 @@ AUDIOQUALITAET=${AUDIOQUALITAET}
 VIDEOCODEC=${VIDEOCODEC}
 VIDEOQUALITAET=${VIDEOQUALITAET}
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
 #exit 240
 
 #==============================================================================#
@@ -1759,26 +1762,36 @@ VIDEOQUALITAET=${VIDEOQUALITAET}
 
 UNTERTITEL_AN="-c:s copy"				# für das zusammensetzen der Filmteile
 if [ "${UNTERTITEL}" == "-1" ] ; then
-	U_TITEL_FF=""
+	U_TITEL_FF_01=""
+	U_TITEL_FF_02=""
 	UNTERTITEL_AN=""				# für das zusammensetzen der Filmteile
 else
-    if [ "x${UNTERTITEL}" == "x" ] ; then
-	UT_LISTE="$(echo "${META_DATEN_STREAM}" | fgrep -i codec_type=subtitle | nl | awk '{print $1 - 1}' | tr -s '\n' ' ')"
-    else
-	UT_LISTE="$(echo "${UNTERTITEL}" | sed 's/,/ /g')"
-    fi
+	if [ "x${UNTERTITEL}" == "x" ] ; then
+		UT_LISTE="$(echo "${META_DATEN_STREAM}" | fgrep -i codec_type=subtitle | nl | awk '{print $1 - 1}' | tr -s '\n' ' ')"
+	else
+		UT_LISTE="$(echo "${UNTERTITEL}" | sed 's/,/ /g')"
+	fi
 
-    U_TITEL_FF="$(for DER_UT in ${UT_LISTE}
-    do
-	echo -n " -map 0:s:${DER_UT} -c:s copy"
-    done)"
+	U_TITEL_FF_01="$(for DER_UT in ${UT_LISTE}
+	do
+		echo -n " -map 0:s:${DER_UT} -c:s copy"
+	done)"
+
+	UT_ANZAHL="$(echo "${UT_LISTE}" | wc -w | awk '{print $1}')"
+	UT_KOPIE="$(seq 0 ${UT_ANZAHL} | head -n ${UT_ANZAHL})"
+	U_TITEL_FF_02="$(for DER_UT in ${UT_KOPIE}
+	do
+		echo -n " -map 0:s:${DER_UT} -c:s copy"
+	done)"
 fi
 
 echo "# 250
 UNTERTITEL=${UNTERTITEL}
 UT_LISTE=${UT_LISTE}
-U_TITEL_FF=${U_TITEL_FF}
+U_TITEL_FF_01=${U_TITEL_FF_01}
+U_TITEL_FF_02=${U_TITEL_FF_02}
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
 #exit 250
 
 #==============================================================================#
@@ -1812,7 +1825,12 @@ if [ "${TS_ANZAHL}" -gt 0 ] ; then
 		echo -n " -map 0:a:${DIE_TS} -c:a ${AUDIOCODEC} ${AUDIOQUALITAET} ${_ST}"
 	done)"
 
-	AUDIO_VERARBEITUNG_02="-c:a copy"
+	TS_KOPIE="$(seq 0 ${TS_ANZAHL} | head -n ${TS_ANZAHL})"
+	AUDIO_VERARBEITUNG_02="$(for DIE_TS in ${TS_KOPIE}
+	do
+		echo -n " -map 0:a:${DIE_TS} -c:a copy"
+	done)"
+
 else
 	AUDIO_VERARBEITUNG_01="-an"
 	AUDIO_VERARBEITUNG_02="-an"
@@ -1854,7 +1872,12 @@ START_ZIEL_FORMAT="-f ${FORMAT}"
 
 #==============================================================================#
 
+SCHNITT_ANZAHL="$(echo "${SCHNITTZEITEN}" | wc -w | awk '{print $1}')"
+
 echo "# 260
+SCHNITTZEITEN=${SCHNITTZEITEN}
+SCHNITT_ANZAHL=${SCHNITT_ANZAHL}
+
 TS_LISTE=${TS_LISTE}
 TS_ANZAHL=${TS_ANZAHL}
 
@@ -1864,29 +1887,37 @@ AUDIO_VERARBEITUNG_02=${AUDIO_VERARBEITUNG_02}
 VIDEOOPTION=${VIDEOOPTION}
 START_ZIEL_FORMAT=${START_ZIEL_FORMAT}
 " | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
 #exit 260
 
+#set -x
 
 #------------------------------------------------------------------------------#
-if [ "x${SCHNITTZEITEN}" = "x" ] ; then
+if [ ${SCHNITT_ANZAHL} -le 1 ] ; then
+	if [ ${SCHNITT_ANZAHL} -eq 1 ] ; then
+		VON="-ss $(echo "${SCHNITTZEITEN}" | tr -d '"' | awk -F'-' '{print $1}')"
+		BIS="-to $(echo "${SCHNITTZEITEN}" | tr -d '"' | awk -F'-' '{print $2}')"
+	fi
 
 	###------------------------------------------------------------------###
 	### hier der Film transkodiert                                       ###
 	###------------------------------------------------------------------###
 	echo
-	echo "1: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+	echo "1: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF_01} ${VON} ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	echo
 #>
-	         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} 2>&1
+	         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF_01} ${VON} ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} 2>&1
 
 else
 
 	#----------------------------------------------------------------------#
 	ZUFALL="$(head -c 100 /dev/urandom | base64 | tr -d '\n' | tr -cd '[:alnum:]' | cut -b-12)"
-	rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt
+	rm -f ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}_Filmliste.txt
 	NUMMER="0"
 	for _SCHNITT in ${SCHNITTZEITEN}
 	do
+		echo "---------------------------------------------------------" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
 		NUMMER="$(echo "${NUMMER}" | awk '{printf "%2.0f\n", $1+1}' | tr -s ' ' '0')"
 		VON="$(echo "${_SCHNITT}" | tr -d '"' | awk -F'-' '{print $1}')"
 		BIS="$(echo "${_SCHNITT}" | tr -d '"' | awk -F'-' '{print $2}')"
@@ -1906,39 +1937,37 @@ else
 		### hier werden die Teile zwischen der Werbung transkodiert  ###
 		###----------------------------------------------------------###
 		echo
-		echo "2: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+		echo "2: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF_01} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 		echo
-#>
-		         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} 2>&1
+		         ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i  "${FILMDATEI}"  ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF_01} -ss ${VON} -to ${BIS} ${FPS} ${START_ZIEL_FORMAT} -y ${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} 2>&1
+
+		ffprobe -i ${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG} 2>&1 | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
                 ### den Film in die Filmliste eintragen
-                echo "echo \"file '${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}'\" >> ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt" | tee -a ${NAME_NEU}.txt
-                echo "file '${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}'" >> ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt
+                echo "echo \"file '${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}'\" >> ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}_Filmliste.txt" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+                echo "file '${ZUFALL}_${NUMMER}_${ZIELNAME}.${ENDUNG}'" >> ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}_Filmliste.txt
 
-		echo "---------------------------------------------------------"
+		echo "---------------------------------------------------------" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 	done
 
-#>
-		echo "
-		${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -f concat -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
-		" | tee -a ${NAME_NEU}.txt
-		${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -f concat -i ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt ${VIDEO_TAG} -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
-		rm -f ${ZIELVERZ}/${ZUFALL}_${NUMMER}_${ZIELNAME}_Filmliste.txt
-#>
+	echo "
+	${PROGRAMM} -f concat -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}_Filmliste.txt -map 0:v -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF_02} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
+	" | tee -a ${NAME_NEU}.txt
+	${PROGRAMM} -f concat -i ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}_Filmliste.txt -map 0:v -c:v copy ${AUDIO_VERARBEITUNG_02} ${U_TITEL_FF_02} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
 
-	#ls -lh ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
-	rm -f ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
+	rm -f ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}_Filmliste.txt
+
+	ffprobe -i ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} 2>&1 | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
+	#ls -lh ${ZUFALL}_*_${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
+	rm -f ${ZUFALL}_*_${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZUFALL}_*_${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZUFALL}_${ZIELNAME}.${ENDUNG}
 
 fi
-#------------------------------------------------------------------------------#
-
-echo "# 270
-5: ${PROGRAMM} ${KOMPLETT_DURCHSUCHEN} ${REPARATUR_PARAMETER} -i \"${FILMDATEI}\" ${VIDEO_TAG} -map 0:v -c:v ${VIDEOCODEC} ${VIDEOOPTION} ${IFRAME} ${AUDIO_VERARBEITUNG_01} ${U_TITEL_FF} ${START_ZIEL_FORMAT} -y ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}
-" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
 
 #------------------------------------------------------------------------------#
 
 ls -lh ${ZIELVERZ}/${ZIELNAME}.${ENDUNG} ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt
+
 LAUFZEIT="$(echo "${STARTZEITPUNKT} $(date +'%s')" | awk '{print $2 - $1}')"
 echo "# 280
 $(date +'%F %T') (${LAUFZEIT})" | tee -a ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.txt

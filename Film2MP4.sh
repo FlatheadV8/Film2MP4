@@ -462,7 +462,7 @@ ${0} ${Film2Standardformat_OPTIONEN}" | tee ${ZIELVERZ}/${ZIELNAME}.${ENDUNG}.tx
 ## -analyzeduration 9223370Ki
 KOMPLETT_DURCHSUCHEN="-probesize 9223372000G -analyzeduration 9223372000G"
 
-KOMPLETT_DURCHSUCHEN="-probesize 100M -analyzeduration 100M"
+#KOMPLETT_DURCHSUCHEN="-probesize 100M -analyzeduration 100M"
 
 #------------------------------------------------------------------------------#
 ### Parameter zum reparieren defekter Container

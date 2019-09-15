@@ -272,7 +272,7 @@ while [ "${#}" -ne "0" ]; do
                         exit 20
                         ;;
                 -h)
-			ausgabe_hilfe
+			#ausgabe_hilfe
                         echo "HILFE:
         # Video- und Audio-Spur in ein HTML5-kompatibles Format transkodieren
 
